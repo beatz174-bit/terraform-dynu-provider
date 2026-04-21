@@ -88,13 +88,13 @@ func (d *domainDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 
 	domainID, _, err := d.clientProvider.client.GetRootDomain(ctx, config.Hostname.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to resolve Dynu domain from hostname", err.Error())
+		resp.Diagnostics.AddError(diagnosticSummary("Unable to resolve Dynu domain from hostname", err), err.Error())
 		return
 	}
 
 	domain, err := d.clientProvider.client.GetDomainByID(ctx, domainID)
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to get Dynu domain", err.Error())
+		resp.Diagnostics.AddError(diagnosticSummary("Unable to get Dynu domain", err), err.Error())
 		return
 	}
 

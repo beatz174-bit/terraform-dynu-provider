@@ -157,6 +157,59 @@ func TestIntegrationDataSourceDiagnosticsFromAPIError(t *testing.T) {
 	}
 }
 
+func TestIntegrationDataSourceDiagnosticsFromAuthError(t *testing.T) {
+	fake := fakedynu.NewServer()
+	defer fake.Close()
+	fake.SetAPIError("/dns/getroot/www.a.example.com", fakedynu.APIError{HTTPStatus: 401, StatusCode: 401, Type: "Unauthorized", Message: "invalid api key"})
+
+	ds := NewDomainDataSource().(*domainDataSource)
+	configureDataSource(t, ds, fake.BaseURL())
+
+	var schemaResp datasource.SchemaResponse
+	ds.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+
+	req := datasource.ReadRequest{Config: tfsdk.Config{
+		Schema: schemaResp.Schema,
+		Raw: tftypes.NewValue(tftypes.Object{AttributeTypes: map[string]tftypes.Type{"hostname": tftypes.String}}, map[string]tftypes.Value{
+			"hostname": tftypes.NewValue(tftypes.String, "www.a.example.com"),
+		}),
+	}}
+	resp := datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	ds.Read(context.Background(), req, &resp)
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected diagnostics error")
+	}
+	if !strings.Contains(resp.Diagnostics[0].Summary(), "authentication failed") {
+		t.Fatalf("unexpected diagnostics summary: %s", resp.Diagnostics[0].Summary())
+	}
+}
+
+func TestIntegrationDataSourceDiagnosticsFromNotFoundError(t *testing.T) {
+	fake := fakedynu.NewServer()
+	defer fake.Close()
+
+	ds := NewDomainDataSource().(*domainDataSource)
+	configureDataSource(t, ds, fake.BaseURL())
+
+	var schemaResp datasource.SchemaResponse
+	ds.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+
+	req := datasource.ReadRequest{Config: tfsdk.Config{
+		Schema: schemaResp.Schema,
+		Raw: tftypes.NewValue(tftypes.Object{AttributeTypes: map[string]tftypes.Type{"hostname": tftypes.String}}, map[string]tftypes.Value{
+			"hostname": tftypes.NewValue(tftypes.String, "missing.a.example.com"),
+		}),
+	}}
+	resp := datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	ds.Read(context.Background(), req, &resp)
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected diagnostics error")
+	}
+	if !strings.Contains(resp.Diagnostics[0].Summary(), "not found") {
+		t.Fatalf("unexpected diagnostics summary: %s", resp.Diagnostics[0].Summary())
+	}
+}
+
 func configureDataSource(t *testing.T, ds datasource.DataSourceWithConfigure, baseURL string) {
 	t.Helper()
 	resp := datasource.ConfigureResponse{}

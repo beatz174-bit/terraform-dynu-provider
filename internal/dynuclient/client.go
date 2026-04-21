@@ -56,6 +56,16 @@ type apiException struct {
 	Message    string `json:"message"`
 }
 
+type APIError struct {
+	StatusCode int
+	Type       string
+	Message    string
+}
+
+func (e *APIError) Error() string {
+	return fmt.Sprintf("dynu API error %d (%s): %s", e.StatusCode, e.Type, e.Message)
+}
+
 type apiResponse struct {
 	StatusCode int           `json:"statusCode"`
 	Exception  *apiException `json:"exception"`
@@ -202,5 +212,9 @@ func parseAPIException(payload []byte) error {
 		return nil
 	}
 
-	return fmt.Errorf("dynu API error %d (%s): %s", apiResult.Exception.StatusCode, apiResult.Exception.Type, apiResult.Exception.Message)
+	return &APIError{
+		StatusCode: apiResult.Exception.StatusCode,
+		Type:       apiResult.Exception.Type,
+		Message:    apiResult.Exception.Message,
+	}
 }

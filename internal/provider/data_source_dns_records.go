@@ -115,13 +115,13 @@ func (d *dnsRecordsDataSource) Read(ctx context.Context, req datasource.ReadRequ
 
 	domainID, domainName, err := d.clientProvider.client.GetRootDomain(ctx, config.Hostname.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to resolve Dynu domain from hostname", err.Error())
+		resp.Diagnostics.AddError(diagnosticSummary("Unable to resolve Dynu domain from hostname", err), err.Error())
 		return
 	}
 
 	records, err := d.clientProvider.client.ListDNSRecords(ctx, domainID)
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to list Dynu DNS records", err.Error())
+		resp.Diagnostics.AddError(diagnosticSummary("Unable to list Dynu DNS records", err), err.Error())
 		return
 	}
 
