@@ -62,10 +62,32 @@ See the `examples/` directory:
 
 ## Developer workflow
 
-- `./scripts/setup-dev.sh` - verify required local tools
+- `./scripts/setup-dev.sh` - validate local Go/Terraform toolchains and environment health (no changes)
+- `./scripts/setup-dev.sh --fix` - attempt safe remediation with installed version managers (`mise`, `asdf`, `tfenv`, `tenv`)
+- `./scripts/setup-dev.sh --strict` - require Terraform to be installed
 - `./scripts/check.sh` - formatting, vet, and unit tests (Tier A)
 - `./scripts/test-integration.sh` - local mock-backed provider integration tests (Tier B)
 - `./scripts/testacc.sh` - default: Tier B; live mode available with `--live` (Tier C)
+
+### setup-dev behavior
+
+`scripts/setup-dev.sh` now performs robust validation and troubleshooting checks:
+
+- Always reports resolved paths for `bash`, `git`, `go`, and `terraform` (Terraform is warning-only unless `--strict` is used).
+- Enforces minimum versions:
+  - Go `>= 1.23` (error if missing or too old)
+  - Terraform `>= 1.5` (warning if missing by default, error if present but too old)
+- Detects common broken Go setups:
+  - manual `GOROOT` conflicting with `go env GOROOT`
+  - stale stdlib tree mismatches (for example missing `slices`, `maps`, `math/rand/v2`)
+- Detects malformed `GOPROXY` and prints the recommended non-destructive fix:
+  - `go env -w GOPROXY=https://proxy.golang.org,direct`
+- Supports optional safe auto-fix mode:
+  - only uses already-installed user-space managers
+  - does **not** run distro package managers, `sudo`, or shell-profile edits
+  - re-validates tools after attempted remediation
+
+The script is safe for both normal shells and VS Code integrated terminals, and includes guidance when terminal/session restart may be needed after changing versions.
 
 ### Standalone repository guarantee
 
@@ -73,6 +95,25 @@ This repository is intentionally self-contained:
 - no dependency on sibling repositories
 - no dependency on external helper scripts (for example `services-up.sh`)
 - no hardcoded local paths (for example `/workspace/...` or `/home/...`)
+
+### setup-dev troubleshooting quick reference
+
+- **Malformed GOPROXY**
+  - Symptom: warning that GOPROXY has no valid entries.
+  - Fix: `go env -w GOPROXY=https://proxy.golang.org,direct`
+
+- **Broken GOROOT**
+  - Symptom: `GOROOT` environment value differs from `go env GOROOT`, or stdlib package checks fail.
+  - Fix: usually remove manual override with `unset GOROOT`, then ensure the intended `go` binary is first in `PATH`.
+
+- **Go version / stdlib path mismatch**
+  - Symptom: `go version` looks modern but build errors mention missing stdlib packages (for example `slices`, `maps`, `math/rand/v2`).
+  - Cause: stale or mismatched Go installation path.
+  - Fix: re-select/install Go via your version manager and re-run `./scripts/setup-dev.sh`.
+
+- **VS Code integrated terminal stale environment**
+  - Symptom: command paths or versions do not match your expected shell setup.
+  - Fix: restart the integrated terminal (or reload the VS Code window) and run `./scripts/setup-dev.sh` again.
 
 ### Build
 
