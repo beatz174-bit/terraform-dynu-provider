@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -136,7 +137,7 @@ func (c *Client) GetDomainByID(ctx context.Context, domainID int64) (*Domain, er
 
 func (c *Client) GetRootDomain(ctx context.Context, hostname string) (int64, string, error) {
 	var resp getRootResponse
-	if err := c.doGET(ctx, fmt.Sprintf("/dns/getroot/%s", hostname), &resp); err != nil {
+	if err := c.doGET(ctx, fmt.Sprintf("/dns/getroot/%s", url.PathEscape(hostname)), &resp); err != nil {
 		return 0, "", err
 	}
 
@@ -156,8 +157,8 @@ func (c *Client) ListDNSRecords(ctx context.Context, domainID int64) ([]DNSRecor
 }
 
 func (c *Client) doGET(ctx context.Context, path string, target any) error {
-	url := c.baseURL + path
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	requestURL := c.baseURL + path
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
 		return err
 	}
@@ -176,7 +177,11 @@ func (c *Client) doGET(ctx context.Context, path string, target any) error {
 		return err
 	}
 
+	apiErr := parseAPIException(payload)
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		if apiErr != nil {
+			return apiErr
+		}
 		return fmt.Errorf("dynu API returned status %d: %s", res.StatusCode, strings.TrimSpace(string(payload)))
 	}
 
@@ -184,10 +189,18 @@ func (c *Client) doGET(ctx context.Context, path string, target any) error {
 		return fmt.Errorf("failed to decode dynu API response: %w", err)
 	}
 
-	apiResult := apiResponse{}
-	if err := json.Unmarshal(payload, &apiResult); err == nil && apiResult.Exception != nil {
-		return fmt.Errorf("dynu API error %d (%s): %s", apiResult.Exception.StatusCode, apiResult.Exception.Type, apiResult.Exception.Message)
+	if apiErr != nil {
+		return apiErr
 	}
 
 	return nil
+}
+
+func parseAPIException(payload []byte) error {
+	apiResult := apiResponse{}
+	if err := json.Unmarshal(payload, &apiResult); err != nil || apiResult.Exception == nil {
+		return nil
+	}
+
+	return fmt.Errorf("dynu API error %d (%s): %s", apiResult.Exception.StatusCode, apiResult.Exception.Type, apiResult.Exception.Message)
 }

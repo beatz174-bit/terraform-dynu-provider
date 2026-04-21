@@ -1,30 +1,38 @@
 # terraform-provider-dynu
 
-A standalone Terraform provider for [Dynu](https://www.dynu.com/) DNS data.
+A standalone Terraform provider for Dynu DNS.
 
-> Current phase: **read-only**. This provider supports provider configuration and data sources only.
+> Status: **read-only milestone**. This provider currently implements provider configuration and data sources only.
 
 ## Feature scope
 
 Implemented:
-- Provider authentication via API key
-- Environment variable support (`DYNU_API_KEY`)
-- Read-only data sources:
+- Provider authentication using `api_key` or `DYNU_API_KEY`
+- Data sources:
   - `dynu_domains`
   - `dynu_domain`
   - `dynu_dns_records`
 
-Not implemented in this phase:
-- Terraform resources
-- Any create/update/delete operations
+Not implemented yet:
+- Terraform resources (no create/update/delete)
+- Any write API operations
+
+## Provider source and module path
+
+- Terraform provider source address: `dynu/dynu`
+- Go module path: `github.com/dynu/terraform-provider-dynu`
+
+The repository can be hosted elsewhere during development, but module and provider source naming are kept aligned with planned public registry publishing.
 
 ## Requirements
 
-- [Terraform](https://developer.hashicorp.com/terraform/downloads) `>= 1.5`
-- [Go](https://go.dev/dl/) `>= 1.23` (for building and testing)
+- Terraform `>= 1.5`
+- Go `>= 1.23`
 - Dynu API key
 
-## Provider configuration
+## Authentication
+
+Option 1: Terraform configuration.
 
 ```hcl
 provider "dynu" {
@@ -37,76 +45,77 @@ variable "dynu_api_key" {
 }
 ```
 
-You can omit `api_key` in Terraform configuration and set the environment variable instead:
+Option 2: Environment variable.
 
 ```bash
 export DYNU_API_KEY="your-dynu-api-key"
 ```
 
-## Data source usage
+## Data source examples
 
-### dynu_domains
+See the `examples/` directory:
+- `examples/provider/provider.tf`
+- `examples/data-sources/dynu_domains/data-source.tf`
+- `examples/data-sources/dynu_domain/data-source.tf`
+- `examples/data-sources/dynu_dns_records/data-source.tf`
 
-```hcl
-data "dynu_domains" "all" {}
-```
+## Developer workflow
 
-### dynu_domain
+- `./scripts/setup-dev.sh` - verify required local tools
+- `./scripts/check.sh` - formatting, vet, and unit tests
+- `./scripts/testacc.sh` - acceptance tests only
 
-```hcl
-data "dynu_domain" "selected" {
-  hostname = "www.example.com"
-}
-```
-
-### dynu_dns_records
-
-```hcl
-data "dynu_dns_records" "records" {
-  hostname = "www.example.com"
-}
-```
-
-## Build
+### Build
 
 ```bash
 go build ./...
 ```
 
-## Test
-
-Run formatting and unit tests:
-
-```bash
-./scripts/check.sh
-```
-
-Or run unit tests directly:
+### Unit tests
 
 ```bash
 go test ./...
 ```
 
-## Acceptance tests
+### Acceptance tests
 
-Acceptance tests are opt-in and require live Dynu credentials.
+Acceptance tests are read-only and opt-in.
+
+Required environment variables:
+- `TF_ACC=1`
+- `DYNU_API_KEY`
+
+Optional:
+- `DYNU_DOMAIN` (required for domain-specific acceptance tests such as `dynu_domain` and `dynu_dns_records`)
+
+Run:
 
 ```bash
-TF_ACC=1 DYNU_API_KEY="your-dynu-api-key" ./scripts/testacc.sh
+TF_ACC=1 DYNU_API_KEY="your-dynu-api-key" DYNU_DOMAIN="www.example.com" ./scripts/testacc.sh
 ```
 
-Optional environment variable:
-- `DYNU_DOMAIN` (for future domain-specific acceptance test cases)
+If `DYNU_DOMAIN` is omitted, domain-specific tests skip cleanly.
 
-## Developer workflow
+## CI
 
-- `./scripts/setup-dev.sh` – validates required local tools
-- `./scripts/check.sh` – runs formatting and unit checks
-- `./scripts/testacc.sh` – runs acceptance tests
+GitHub Actions CI runs on push and pull requests and executes:
+- gofmt verification
+- `go vet ./...`
+- `go test ./...`
 
-Repository-local Codex helpers are also available under `codex/` for agent-oriented workflows.
+Acceptance tests are intentionally excluded from default CI.
+
+## Documentation
+
+Registry-style markdown docs are stored in `docs/`.
 
 ## Limitations
 
-- Read-only provider phase only
-- No writable Terraform resources yet
+- Dynu timestamps are currently exposed as strings exactly as returned by Dynu API.
+- Data returned from Dynu is sorted in provider state for Terraform stability.
+- Read-only operations only.
+
+## Roadmap
+
+Next planned milestone after this quality-hardening release:
+- first writable resource (`dynu_dns_record`) with careful CRUD behavior and acceptance coverage.

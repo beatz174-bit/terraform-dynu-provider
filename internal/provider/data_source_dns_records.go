@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -52,30 +53,34 @@ func (d *dnsRecordsDataSource) Metadata(_ context.Context, req datasource.Metada
 
 func (d *dnsRecordsDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Get DNS records from Dynu for the domain resolved from a hostname.",
+		Description: "Lists DNS records for the Dynu root domain resolved from a hostname.",
 		Attributes: map[string]schema.Attribute{
 			"hostname": schema.StringAttribute{
 				Required:    true,
-				Description: "Any hostname under the target root domain.",
-				Validators:  []validator.String{stringvalidator.LengthAtLeast(1)},
+				Description: "Fully-qualified hostname under the target root domain.",
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
+					stringvalidator.RegexMatches(hostnameValidator, "must be a valid fully-qualified hostname"),
+				},
 			},
-			"domain_id":   schema.Int64Attribute{Computed: true},
-			"domain_name": schema.StringAttribute{Computed: true},
+			"domain_id":   schema.Int64Attribute{Computed: true, Description: "Dynu domain ID resolved from hostname."},
+			"domain_name": schema.StringAttribute{Computed: true, Description: "Dynu root domain name resolved from hostname."},
 			"records": schema.ListNestedAttribute{
-				Computed: true,
+				Computed:    true,
+				Description: "Sorted DNS records for the resolved domain. Timestamps are returned as Dynu provides them.",
 				NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
-					"id":          schema.Int64Attribute{Computed: true},
-					"domain_id":   schema.Int64Attribute{Computed: true},
-					"domain_name": schema.StringAttribute{Computed: true},
-					"node_name":   schema.StringAttribute{Computed: true},
-					"hostname":    schema.StringAttribute{Computed: true},
-					"record_type": schema.StringAttribute{Computed: true},
-					"ttl":         schema.Int64Attribute{Computed: true},
-					"state":       schema.BoolAttribute{Computed: true},
-					"content":     schema.StringAttribute{Computed: true},
-					"updated_on":  schema.StringAttribute{Computed: true},
-					"group":       schema.StringAttribute{Computed: true},
-					"host":        schema.StringAttribute{Computed: true},
+					"id":          schema.Int64Attribute{Computed: true, Description: "Dynu DNS record ID."},
+					"domain_id":   schema.Int64Attribute{Computed: true, Description: "Dynu domain ID for this record."},
+					"domain_name": schema.StringAttribute{Computed: true, Description: "Domain name for this record."},
+					"node_name":   schema.StringAttribute{Computed: true, Description: "Node/label portion of the record."},
+					"hostname":    schema.StringAttribute{Computed: true, Description: "Fully-qualified hostname for the record."},
+					"record_type": schema.StringAttribute{Computed: true, Description: "DNS record type (A, CNAME, TXT, etc.)."},
+					"ttl":         schema.Int64Attribute{Computed: true, Description: "DNS TTL in seconds."},
+					"state":       schema.BoolAttribute{Computed: true, Description: "Whether this DNS record is active."},
+					"content":     schema.StringAttribute{Computed: true, Description: "Record content/value."},
+					"updated_on":  schema.StringAttribute{Computed: true, Description: "Last update timestamp as returned by Dynu."},
+					"group":       schema.StringAttribute{Computed: true, Description: "Dynu group value for this record."},
+					"host":        schema.StringAttribute{Computed: true, Description: "Host field as returned by Dynu."},
 				}},
 			},
 		},
@@ -101,6 +106,11 @@ func (d *dnsRecordsDataSource) Read(ctx context.Context, req datasource.ReadRequ
 		return
 	}
 
+	if state.Hostname.IsUnknown() || state.Hostname.IsNull() {
+		resp.Diagnostics.AddAttributeError(path.Root("hostname"), "Invalid hostname", "The hostname must be known and non-null.")
+		return
+	}
+
 	domainID, domainName, err := d.clientProvider.client.GetRootDomain(ctx, state.Hostname.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to resolve Dynu domain from hostname", err.Error())
@@ -112,6 +122,8 @@ func (d *dnsRecordsDataSource) Read(ctx context.Context, req datasource.ReadRequ
 		resp.Diagnostics.AddError("Unable to list Dynu DNS records", err.Error())
 		return
 	}
+
+	sortDNSRecords(records)
 
 	state.DomainID = types.Int64Value(domainID)
 	state.DomainName = types.StringValue(domainName)
