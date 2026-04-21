@@ -8,6 +8,7 @@ A standalone Terraform provider for Dynu DNS.
 
 Implemented:
 - Provider authentication using `api_key` or `DYNU_API_KEY`
+- Optional provider `base_url` override for local test/dev setups
 - Data sources:
   - `dynu_domains`
   - `dynu_domain`
@@ -28,7 +29,7 @@ The repository can be hosted elsewhere during development, but module and provid
 
 - Terraform `>= 1.5`
 - Go `>= 1.23`
-- Dynu API key
+- Dynu API key for live API usage
 
 ## Authentication
 
@@ -62,8 +63,9 @@ See the `examples/` directory:
 ## Developer workflow
 
 - `./scripts/setup-dev.sh` - verify required local tools
-- `./scripts/check.sh` - formatting, vet, and unit tests
-- `./scripts/testacc.sh` - acceptance tests only
+- `./scripts/check.sh` - formatting, vet, and unit tests (Tier A)
+- `./scripts/test-integration.sh` - local mock-backed provider integration tests (Tier B)
+- `./scripts/testacc.sh` - default: Tier B; live mode available with `--live` (Tier C)
 
 ### Build
 
@@ -71,15 +73,35 @@ See the `examples/` directory:
 go build ./...
 ```
 
-### Unit tests
+## Testing model
+
+The provider now has three explicit test tiers:
+
+### Tier A: unit tests (fast, no network)
+
+Covers focused package behavior (client parsing, mappers, provider helper logic).
 
 ```bash
+./scripts/check.sh
 go test ./...
 ```
 
-### Acceptance tests
+### Tier B: local integration tests (mock Dynu API, no real credentials)
 
-Acceptance tests are read-only and opt-in.
+These tests use an `httptest` fake Dynu API server and run the Terraform provider end-to-end against deterministic fixtures.
+
+- No Dynu account required
+- Dummy API key is used in test provider configuration
+- Exercises provider wiring, schema/state mapping, hostname resolution flow, and diagnostic behavior
+
+```bash
+./scripts/test-integration.sh
+./scripts/testacc.sh
+```
+
+### Tier C: live acceptance tests (opt-in)
+
+These tests call the real Dynu API and are read-only.
 
 Required environment variables:
 - `TF_ACC=1`
@@ -88,13 +110,13 @@ Required environment variables:
 Optional:
 - `DYNU_DOMAIN` (required for domain-specific acceptance tests such as `dynu_domain` and `dynu_dns_records`)
 
-Run:
-
 ```bash
-TF_ACC=1 DYNU_API_KEY="your-dynu-api-key" DYNU_DOMAIN="www.example.com" ./scripts/testacc.sh
+TF_ACC=1 DYNU_API_KEY="your-dynu-api-key" DYNU_DOMAIN="www.example.com" ./scripts/testacc.sh --live
+# or
+LIVE=1 TF_ACC=1 DYNU_API_KEY="your-dynu-api-key" ./scripts/testacc.sh
 ```
 
-If `DYNU_DOMAIN` is omitted, domain-specific tests skip cleanly.
+If `DYNU_DOMAIN` is omitted, domain-specific live tests skip cleanly.
 
 ## CI
 
@@ -103,7 +125,7 @@ GitHub Actions CI runs on push and pull requests and executes:
 - `go vet ./...`
 - `go test ./...`
 
-Acceptance tests are intentionally excluded from default CI.
+Live acceptance tests are intentionally excluded from default CI.
 
 ## Documentation
 
@@ -117,5 +139,5 @@ Registry-style markdown docs are stored in `docs/`.
 
 ## Roadmap
 
-Next planned milestone after this quality-hardening release:
-- first writable resource (`dynu_dns_record`) with careful CRUD behavior and acceptance coverage.
+Next planned milestone after this testing foundation:
+- first writable resource (`dynu_dns_record`) with strict schema validation, import support, mock-first integration tests, and then live acceptance coverage.

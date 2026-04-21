@@ -1,27 +1,19 @@
-package dynuclient
+package dynuclient_test
 
 import (
 	"context"
-	"net/http"
-	"net/http/httptest"
+	"github.com/dynu/terraform-provider-dynu/internal/dynuclient"
 	"strings"
 	"testing"
+
+	"github.com/dynu/terraform-provider-dynu/internal/testutil/fakedynu"
 )
 
 func TestClientListDomainsSuccess(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/dns" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		if got := r.Header.Get("API-Key"); got != "test-key" {
-			t.Fatalf("unexpected api key header: %s", got)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"statusCode":200,"domains":[{"id":2,"name":"z.example.com"},{"id":1,"name":"a.example.com"}]}`))
-	}))
-	defer ts.Close()
+	fake := fakedynu.NewServer()
+	defer fake.Close()
 
-	client := New("test-key", WithBaseURL(ts.URL), WithHTTPClient(ts.Client()))
+	client := dynuclient.New("test-key", dynuclient.WithBaseURL(fake.BaseURL()), dynuclient.WithHTTPClient(fake.Client()))
 	domains, err := client.ListDomains(context.Background())
 	if err != nil {
 		t.Fatalf("ListDomains() error = %v", err)
@@ -32,13 +24,11 @@ func TestClientListDomainsSuccess(t *testing.T) {
 }
 
 func TestClientDoGetNon2xxStatus(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusUnauthorized)
-		_, _ = w.Write([]byte(`{"message":"nope"}`))
-	}))
-	defer ts.Close()
+	fake := fakedynu.NewServer()
+	defer fake.Close()
+	fake.SetRawResponse("/dns", 401, `{"message":"nope"}`)
 
-	client := New("test-key", WithBaseURL(ts.URL), WithHTTPClient(ts.Client()))
+	client := dynuclient.New("test-key", dynuclient.WithBaseURL(fake.BaseURL()), dynuclient.WithHTTPClient(fake.Client()))
 	_, err := client.ListDomains(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "status 401") {
 		t.Fatalf("expected status error, got %v", err)
@@ -46,13 +36,11 @@ func TestClientDoGetNon2xxStatus(t *testing.T) {
 }
 
 func TestClientDoGetAPIExceptionPayload(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"statusCode":200,"exception":{"statusCode":400,"type":"Validation Exception","message":"bad hostname"}}`))
-	}))
-	defer ts.Close()
+	fake := fakedynu.NewServer()
+	defer fake.Close()
+	fake.SetAPIError("/dns", fakedynu.APIError{HTTPStatus: 400, StatusCode: 400, Type: "Validation Exception", Message: "bad hostname"})
 
-	client := New("test-key", WithBaseURL(ts.URL), WithHTTPClient(ts.Client()))
+	client := dynuclient.New("test-key", dynuclient.WithBaseURL(fake.BaseURL()), dynuclient.WithHTTPClient(fake.Client()))
 	_, err := client.ListDomains(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "Validation Exception") {
 		t.Fatalf("expected API exception error, got %v", err)
@@ -60,13 +48,11 @@ func TestClientDoGetAPIExceptionPayload(t *testing.T) {
 }
 
 func TestClientDoGetMalformedJSON(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"statusCode":200,"domains":[`))
-	}))
-	defer ts.Close()
+	fake := fakedynu.NewServer()
+	defer fake.Close()
+	fake.SetRawResponse("/dns", 200, `{"statusCode":200,"domains":[`)
 
-	client := New("test-key", WithBaseURL(ts.URL), WithHTTPClient(ts.Client()))
+	client := dynuclient.New("test-key", dynuclient.WithBaseURL(fake.BaseURL()), dynuclient.WithHTTPClient(fake.Client()))
 	_, err := client.ListDomains(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "failed to decode dynu API response") {
 		t.Fatalf("expected decode error, got %v", err)
@@ -74,31 +60,25 @@ func TestClientDoGetMalformedJSON(t *testing.T) {
 }
 
 func TestClientGetRootDomainIncompleteResponse(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"statusCode":200,"id":0,"domainName":""}`))
-	}))
-	defer ts.Close()
+	fake := fakedynu.NewServer()
+	defer fake.Close()
+	fake.SetRawResponse("/dns/getroot/www.a.example.com", 200, `{"statusCode":200,"id":0,"domainName":""}`)
 
-	client := New("test-key", WithBaseURL(ts.URL), WithHTTPClient(ts.Client()))
-	_, _, err := client.GetRootDomain(context.Background(), "www.example.com")
+	client := dynuclient.New("test-key", dynuclient.WithBaseURL(fake.BaseURL()), dynuclient.WithHTTPClient(fake.Client()))
+	_, _, err := client.GetRootDomain(context.Background(), "www.a.example.com")
 	if err == nil || !strings.Contains(err.Error(), "incomplete root domain response") {
 		t.Fatalf("expected incomplete response error, got %v", err)
 	}
 }
 
 func TestClientGetRootDomainEscapesHostname(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.Contains(r.RequestURI, "spaces%20in%20name.example.com") {
-			t.Fatalf("expected escaped hostname path, got %s", r.RequestURI)
-		}
-		_, _ = w.Write([]byte(`{"statusCode":200,"id":123,"domainName":"example.com"}`))
-	}))
-	defer ts.Close()
+	fake := fakedynu.NewServer()
+	defer fake.Close()
+	fake.SetAPIError("/dns/getroot/spaces%20in%20name.example.com", fakedynu.APIError{HTTPStatus: 404, StatusCode: 404, Type: "Not Found", Message: "hostname not found"})
 
-	client := New("test-key", WithBaseURL(ts.URL), WithHTTPClient(ts.Client()))
+	client := dynuclient.New("test-key", dynuclient.WithBaseURL(fake.BaseURL()), dynuclient.WithHTTPClient(fake.Client()))
 	_, _, err := client.GetRootDomain(context.Background(), "spaces in name.example.com")
-	if err != nil {
-		t.Fatalf("expected nil error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "hostname not found") {
+		t.Fatalf("expected hostname not found error, got %v", err)
 	}
 }
