@@ -93,6 +93,28 @@ Covers focused package behavior (client parsing, mappers, provider helper logic)
 go test ./...
 ```
 
+### Troubleshooting Go dependency downloads
+
+If you see an error like:
+
+```text
+GOPROXY list is not the empty string, but contains no entries
+```
+
+your local Go environment is misconfigured. A common fix is:
+
+```bash
+go env -w GOPROXY=https://proxy.golang.org,direct
+```
+
+Helpful diagnostics:
+
+```bash
+go env GOPROXY
+echo "$GOPROXY"
+```
+
+### Acceptance tests
 ### Tier B: local integration tests (mock Dynu API, no real credentials)
 
 These tests use an `httptest` fake Dynu API server and run the Terraform provider end-to-end against deterministic fixtures.

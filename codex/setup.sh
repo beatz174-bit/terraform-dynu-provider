@@ -14,6 +14,33 @@ for cmd in bash git; do
   have "$cmd" || die "$cmd is required"
 done
 
+validate_goproxy() {
+  local value="$1"
+  local part trimmed
+  local has_valid=0
+
+  IFS=',' read -r -a parts <<<"$value"
+  for part in "${parts[@]}"; do
+    trimmed="${part#"${part%%[![:space:]]*}"}"
+    trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+    if [[ -n "$trimmed" ]]; then
+      has_valid=1
+      break
+    fi
+  done
+
+  if [[ "$has_valid" -eq 0 ]]; then
+    warn "GOPROXY appears malformed: non-empty value contains no entries"
+    warn "This can cause errors like: GOPROXY list is not the empty string, but contains no entries"
+    warn "Suggested fix: go env -w GOPROXY=https://proxy.golang.org,direct"
+    warn "Current GOPROXY from environment: '$value'"
+  fi
+}
+
+if [[ "${GOPROXY+x}" == "x" ]]; then
+  validate_goproxy "$GOPROXY"
+fi
+
 ensure_dir .codex
 ensure_dir .codex/bin
 ensure_dir .codex/cache
