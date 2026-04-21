@@ -7,6 +7,7 @@ description: |-
 # dynu Provider
 
 The `dynu` provider lets Terraform read Dynu DNS domain and record data.
+This provider repository is standalone and does not require any external companion repository or helper script.
 
 ## Example Usage
 
