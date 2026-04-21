@@ -1,11 +1,13 @@
 output "domains" {
   description = "All visible Dynu domains."
   value       = data.dynu_domains.all.domains
+  sensitive   = true
 }
 
 output "resolved_domain" {
   description = "Resolved Dynu root domain details for var.hostname."
   value       = data.dynu_domain.selected.domain
+  sensitive   = true
 }
 
 output "resolved_dns_records" {
