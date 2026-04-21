@@ -1,8 +1,14 @@
 package provider
 
 import (
+	"context"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/dynu/terraform-provider-dynu/internal/dynuclient"
+	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -26,5 +32,63 @@ func TestResolveAPIKey(t *testing.T) {
 				t.Fatalf("resolveAPIKey() = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestProviderSchema(t *testing.T) {
+	p := New("test")()
+	var resp provider.SchemaResponse
+	p.Schema(context.Background(), provider.SchemaRequest{}, &resp)
+
+	apiKeyAttr, ok := resp.Schema.Attributes["api_key"]
+	if !ok {
+		t.Fatal("expected api_key in provider schema")
+	}
+	if !apiKeyAttr.IsOptional() {
+		t.Fatal("expected api_key to be optional")
+	}
+
+	baseURLAttr, ok := resp.Schema.Attributes["base_url"]
+	if !ok {
+		t.Fatal("expected base_url in provider schema")
+	}
+	if !baseURLAttr.IsOptional() {
+		t.Fatal("expected base_url to be optional")
+	}
+}
+
+func TestDiagnosticSummary(t *testing.T) {
+	tests := []struct {
+		name    string
+		err     error
+		summary string
+		want    string
+	}{
+		{name: "non api error", err: os.ErrNotExist, summary: "Unable to list Dynu domains", want: "Unable to list Dynu domains"},
+		{name: "auth error", err: &dynuclient.APIError{StatusCode: 401, Type: "Unauthorized", Message: "invalid"}, summary: "Unable to list Dynu domains", want: "Unable to list Dynu domains (authentication failed)"},
+		{name: "not found", err: &dynuclient.APIError{StatusCode: 404, Type: "Not Found", Message: "missing"}, summary: "Unable to resolve Dynu domain from hostname", want: "Unable to resolve Dynu domain from hostname (not found)"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := diagnosticSummary(tc.summary, tc.err); got != tc.want {
+				t.Fatalf("diagnosticSummary() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestReadOnlyExampleUsesValidProviderArguments(t *testing.T) {
+	contents, err := os.ReadFile(filepath.Join("..", "..", "examples", "read_only", "providers.tf"))
+	if err != nil {
+		t.Fatalf("read example providers.tf: %v", err)
+	}
+
+	config := string(contents)
+	if strings.Contains(config, "username") {
+		t.Fatal("example providers.tf must not use unsupported provider argument 'username'")
+	}
+	if !strings.Contains(config, "api_key") {
+		t.Fatal("example providers.tf must include api_key argument")
 	}
 }

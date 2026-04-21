@@ -2,212 +2,188 @@
 
 A standalone Terraform provider for Dynu DNS.
 
-> Status: **read-only milestone**. This provider currently implements provider configuration and data sources only.
+> Status: **read-only milestone**. This provider currently implements provider configuration plus read-only data sources.
 
-## Feature scope
+## Quick start (local dev with `dev_overrides`)
 
-Implemented:
-- Provider authentication using `api_key` or `DYNU_API_KEY`
-- Optional provider `base_url` override for local test/dev setups
-- Data sources:
-  - `dynu_domains`
-  - `dynu_domain`
-  - `dynu_dns_records`
+This provider is **not published** to the Terraform Registry yet. For local development, use Terraform CLI `dev_overrides` and your local provider binary.
 
-Not implemented yet:
-- Terraform resources (no create/update/delete)
-- Any write API operations
+1. Build provider binary in repo root:
 
-## Provider source and module path
+```bash
+go build -o terraform-provider-dynu
+```
 
-- Terraform provider source address: `dynu/dynu`
-- Go module path: `github.com/dynu/terraform-provider-dynu`
-
-The repository can be hosted elsewhere during development, but module and provider source naming are kept aligned with planned public registry publishing.
-
-## Requirements
-
-- Terraform `>= 1.5`
-- Go `>= 1.23`
-- Dynu API key for live API usage
-
-## Authentication
-
-Option 1: Terraform configuration.
+2. Configure `~/.terraformrc`:
 
 ```hcl
+provider_installation {
+  dev_overrides {
+    "dynu/dynu" = "/path/to/terraform-dynu-provider"
+  }
+
+  direct {}
+}
+```
+
+3. Run the runnable read-only example:
+
+```bash
+cd examples/read_only
+cp terraform.tfvars.example terraform.tfvars
+terraform validate
+terraform plan
+```
+
+> With `dev_overrides`, Terraform uses your local binary for `dynu/dynu`. `terraform init` is not the primary local-dev loop here and may still try registry/network operations.
+
+## Copy/paste starter configuration
+
+```hcl
+terraform {
+  required_providers {
+    dynu = {
+      source = "dynu/dynu"
+    }
+  }
+}
+
 provider "dynu" {
-  api_key = var.dynu_api_key
+  api_key = var.dynu_api_key # optional if DYNU_API_KEY is set
 }
 
 variable "dynu_api_key" {
   type      = string
+  default   = null
   sensitive = true
+}
+
+data "dynu_domains" "all" {}
+
+# Use a real hostname from your Dynu account.
+data "dynu_domain" "selected" {
+  hostname = "www.example.com"
+}
+
+data "dynu_dns_records" "selected" {
+  hostname = "www.example.com"
 }
 ```
 
-Option 2: Environment variable.
+## Provider schema reference
 
-```bash
-export DYNU_API_KEY="your-dynu-api-key"
+### Provider: `dynu`
+
+Optional arguments:
+- `api_key` (String, Sensitive)
+  - Falls back to `DYNU_API_KEY` environment variable when omitted.
+- `base_url` (String)
+  - Test/dev override for Dynu API base URL.
+
+No provider resources are implemented yet.
+
+## Data source schema reference
+
+### `dynu_domains`
+
+Arguments:
+- none
+
+Attributes:
+- `domains` (List(Object)):
+  - `id`, `name`, `unicode_name`, `token` (sensitive), `state`, `group`
+  - `ipv4_address`, `ipv6_address`, `ttl`
+  - `ipv4`, `ipv6`, `ipv4_wildcard_alias`, `ipv6_wildcard_alias`
+  - `allow_zone_transfer`, `dnssec`, `created_on`, `updated_on`
+
+Example:
+
+```hcl
+data "dynu_domains" "all" {}
 ```
 
-## Data source examples
+### `dynu_domain`
 
-See the `examples/` directory:
-- `examples/provider/provider.tf`
-- `examples/data-sources/dynu_domains/data-source.tf`
-- `examples/data-sources/dynu_domain/data-source.tf`
-- `examples/data-sources/dynu_dns_records/data-source.tf`
+Arguments:
+- `hostname` (String, required)
+
+Attributes:
+- `domain` (Object) with the same fields as `dynu_domains.domains[*]`.
+
+Example:
+
+```hcl
+data "dynu_domain" "selected" {
+  hostname = "www.example.com"
+}
+```
+
+### `dynu_dns_records`
+
+Arguments:
+- `hostname` (String, required)
+
+Attributes:
+- `domain_id` (Number)
+- `domain_name` (String)
+- `records` (List(Object)) with:
+  - `id`, `domain_id`, `domain_name`, `node_name`, `hostname`, `record_type`
+  - `ttl`, `state`, `content`, `updated_on`, `group`, `host`
+
+Example:
+
+```hcl
+data "dynu_dns_records" "selected" {
+  hostname = "www.example.com"
+}
+```
+
+## Examples
+
+- Runnable local workflow: `examples/read_only/`
+- Provider block example: `examples/provider/provider.tf`
+- Individual data source snippets:
+  - `examples/data-sources/dynu_domains/data-source.tf`
+  - `examples/data-sources/dynu_domain/data-source.tf`
+  - `examples/data-sources/dynu_dns_records/data-source.tf`
+
+## Troubleshooting local dev
+
+- **Unsupported provider arguments**
+  - Symptom: errors such as `Unsupported argument` (for example `username`).
+  - Fix: use only `api_key` and/or `base_url` in `provider "dynu"`.
+
+- **Bad API credentials**
+  - Symptom: diagnostics mention authentication failures.
+  - Fix: verify `api_key` or `DYNU_API_KEY` and re-run `terraform plan`.
+
+- **Unknown data source arguments**
+  - Symptom: unsupported argument errors in data blocks.
+  - Fix: `dynu_domain` and `dynu_dns_records` require only `hostname`; `dynu_domains` takes no arguments.
+
+- **Stale provider binary after code changes**
+  - Symptom: Terraform behavior doesn't reflect latest code.
+  - Fix: rebuild binary (`go build -o terraform-provider-dynu`) and run `terraform plan` again.
 
 ## Developer workflow
 
-- `./scripts/setup-dev.sh` - validate local Go/Terraform toolchains and environment health (no changes)
-- `./scripts/setup-dev.sh --fix` - attempt safe remediation with installed version managers (`mise`, `asdf`, `tfenv`, `tenv`)
-- `./scripts/setup-dev.sh --strict` - require Terraform to be installed
-- `./scripts/check.sh` - formatting, vet, and unit tests (Tier A)
-- `./scripts/test-integration.sh` - local mock-backed provider integration tests (Tier B)
-- `./scripts/testacc.sh` - default: Tier B; live mode available with `--live` (Tier C)
+- `./scripts/setup-dev.sh` - validate local toolchain requirements
+- `./scripts/check.sh` - formatting, vet, and unit tests
+- `./scripts/test-integration.sh` - local mock-backed provider integration tests
+- `./scripts/testacc.sh` - acceptance/integration test wrapper (live tests opt-in)
 
-### setup-dev behavior
-
-`scripts/setup-dev.sh` now performs robust validation and troubleshooting checks:
-
-- Always reports resolved paths for `bash`, `git`, `go`, and `terraform` (Terraform is warning-only unless `--strict` is used).
-- Enforces minimum versions:
-  - Go `>= 1.23` (error if missing or too old)
-  - Terraform `>= 1.5` (warning if missing by default, error if present but too old)
-- Detects common broken Go setups:
-  - manual `GOROOT` conflicting with `go env GOROOT`
-  - stale stdlib tree mismatches (for example missing `slices`, `maps`, `math/rand/v2`)
-- Detects malformed `GOPROXY` and prints the recommended non-destructive fix:
-  - `go env -w GOPROXY=https://proxy.golang.org,direct`
-- Supports optional safe auto-fix mode:
-  - only uses already-installed user-space managers
-  - does **not** run distro package managers, `sudo`, or shell-profile edits
-  - re-validates tools after attempted remediation
-
-The script is safe for both normal shells and VS Code integrated terminals, and includes guidance when terminal/session restart may be needed after changing versions.
-
-### Standalone repository guarantee
-
-This repository is intentionally self-contained:
-- no dependency on sibling repositories
-- no dependency on external helper scripts (for example `services-up.sh`)
-- no hardcoded local paths (for example `/workspace/...` or `/home/...`)
-
-### setup-dev troubleshooting quick reference
-
-- **Malformed GOPROXY**
-  - Symptom: warning that GOPROXY has no valid entries.
-  - Fix: `go env -w GOPROXY=https://proxy.golang.org,direct`
-
-- **Broken GOROOT**
-  - Symptom: `GOROOT` environment value differs from `go env GOROOT`, or stdlib package checks fail.
-  - Fix: usually remove manual override with `unset GOROOT`, then ensure the intended `go` binary is first in `PATH`.
-
-- **Go version / stdlib path mismatch**
-  - Symptom: `go version` looks modern but build errors mention missing stdlib packages (for example `slices`, `maps`, `math/rand/v2`).
-  - Cause: stale or mismatched Go installation path.
-  - Fix: re-select/install Go via your version manager and re-run `./scripts/setup-dev.sh`.
-
-- **VS Code integrated terminal stale environment**
-  - Symptom: command paths or versions do not match your expected shell setup.
-  - Fix: restart the integrated terminal (or reload the VS Code window) and run `./scripts/setup-dev.sh` again.
-
-### Build
-
-```bash
-go build ./...
-```
-
-## Testing model
-
-The provider now has three explicit test tiers:
-
-### Tier A: unit tests (fast, no network)
-
-Covers focused package behavior (client parsing, mappers, provider helper logic).
-
-```bash
-./scripts/check.sh
-go test ./...
-```
-
-### Troubleshooting Go dependency downloads
-
-If you see an error like:
-
-```text
-GOPROXY list is not the empty string, but contains no entries
-```
-
-your local Go environment is misconfigured. A common fix is:
-
-```bash
-go env -w GOPROXY=https://proxy.golang.org,direct
-```
-
-Helpful diagnostics:
-
-```bash
-go env GOPROXY
-echo "$GOPROXY"
-```
-
-### Acceptance tests
-### Tier B: local integration tests (mock Dynu API, no real credentials)
-
-These tests use an `httptest` fake Dynu API server and run the Terraform provider end-to-end against deterministic fixtures.
-
-- No Dynu account required
-- Dummy API key is used in test provider configuration
-- Exercises provider wiring, schema/state mapping, hostname resolution flow, and diagnostic behavior
-
-```bash
-./scripts/test-integration.sh
-./scripts/testacc.sh
-```
-
-### Tier C: live acceptance tests (opt-in)
-
-These tests call the real Dynu API and are read-only.
-
-Required environment variables:
+Live acceptance tests are read-only and require:
 - `TF_ACC=1`
 - `DYNU_API_KEY`
+- optional `DYNU_DOMAIN` for domain-specific coverage
 
-Optional:
-- `DYNU_DOMAIN` (required for domain-specific acceptance tests such as `dynu_domain` and `dynu_dns_records`)
+## Feature scope
 
-```bash
-TF_ACC=1 DYNU_API_KEY="your-dynu-api-key" DYNU_DOMAIN="www.example.com" ./scripts/testacc.sh --live
-# or
-LIVE=1 TF_ACC=1 DYNU_API_KEY="your-dynu-api-key" ./scripts/testacc.sh
-```
+Implemented:
+- Provider authentication via `api_key` or `DYNU_API_KEY`
+- Optional provider `base_url` override
+- Data sources: `dynu_domains`, `dynu_domain`, `dynu_dns_records`
 
-If `DYNU_DOMAIN` is omitted, domain-specific live tests skip cleanly.
-
-## CI
-
-GitHub Actions CI runs on push and pull requests and executes:
-- gofmt verification
-- `go vet ./...`
-- `go test ./...`
-
-Live acceptance tests are intentionally excluded from default CI.
-
-## Documentation
-
-Registry-style markdown docs are stored in `docs/`.
-
-## Limitations
-
-- Dynu timestamps are currently exposed as strings exactly as returned by Dynu API.
-- Data returned from Dynu is sorted in provider state for Terraform stability.
-- Read-only operations only.
-
-## Roadmap
-
-Next planned milestone after this testing foundation:
-- first writable resource (`dynu_dns_record`) with strict schema validation, import support, mock-first integration tests, and then live acceptance coverage.
+Not implemented yet:
+- Terraform resources (create/update/delete)
+- Any write API operations

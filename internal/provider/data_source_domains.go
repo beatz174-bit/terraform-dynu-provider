@@ -80,7 +80,7 @@ func (d *domainsDataSource) Configure(_ context.Context, req datasource.Configur
 func (d *domainsDataSource) Read(ctx context.Context, _ datasource.ReadRequest, resp *datasource.ReadResponse) {
 	domains, err := d.clientProvider.client.ListDomains(ctx)
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to list Dynu domains", err.Error())
+		resp.Diagnostics.AddError(diagnosticSummary("Unable to list Dynu domains", err), err.Error())
 		return
 	}
 
