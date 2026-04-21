@@ -84,6 +84,27 @@ go build ./...
 go test ./...
 ```
 
+### Troubleshooting Go dependency downloads
+
+If you see an error like:
+
+```text
+GOPROXY list is not the empty string, but contains no entries
+```
+
+your local Go environment is misconfigured. A common fix is:
+
+```bash
+go env -w GOPROXY=https://proxy.golang.org,direct
+```
+
+Helpful diagnostics:
+
+```bash
+go env GOPROXY
+echo "$GOPROXY"
+```
+
 ### Acceptance tests
 
 Acceptance tests are read-only and opt-in.
