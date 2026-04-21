@@ -13,7 +13,7 @@ echo "time: $(date -u +%FT%TZ)"
 echo
 
 echo "--- tools ---"
-for cmd in bash git python3 docker; do
+for cmd in bash git go terraform; do
   if have "$cmd"; then
     echo "$cmd: $(command -v "$cmd")"
   else
@@ -23,17 +23,14 @@ done
 echo
 
 echo "--- repo ---"
-[[ -f services-up.sh ]] && echo "services-up.sh: present" || echo "services-up.sh: missing"
-[[ -d core ]] && echo "core/: present" || true
-[[ -d apps ]] && echo "apps/: present" || true
-[[ -d monitoring ]] && echo "monitoring/: present" || true
+for path in README.md go.mod main.go internal/provider/provider.go; do
+  if [[ -f "$path" ]]; then
+    echo "$path: present"
+  else
+    echo "$path: missing"
+  fi
+done
 echo
 
 echo "--- git status ---"
 git status --short || true
-echo
-
-if have docker && docker compose version >/dev/null 2>&1; then
-  echo "--- docker compose ---"
-  docker compose version || true
-fi
