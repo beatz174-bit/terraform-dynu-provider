@@ -1,0 +1,137 @@
+package provider
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+)
+
+var (
+	_ datasource.DataSource              = &dnsRecordsDataSource{}
+	_ datasource.DataSourceWithConfigure = &dnsRecordsDataSource{}
+)
+
+type dnsRecordsDataSource struct {
+	clientProvider *providerData
+}
+
+type dnsRecordsDataSourceModel struct {
+	Hostname   types.String         `tfsdk:"hostname"`
+	DomainID   types.Int64          `tfsdk:"domain_id"`
+	DomainName types.String         `tfsdk:"domain_name"`
+	Records    []dnsRecordStateItem `tfsdk:"records"`
+}
+
+type dnsRecordStateItem struct {
+	ID         types.Int64  `tfsdk:"id"`
+	DomainID   types.Int64  `tfsdk:"domain_id"`
+	DomainName types.String `tfsdk:"domain_name"`
+	NodeName   types.String `tfsdk:"node_name"`
+	Hostname   types.String `tfsdk:"hostname"`
+	RecordType types.String `tfsdk:"record_type"`
+	TTL        types.Int64  `tfsdk:"ttl"`
+	State      types.Bool   `tfsdk:"state"`
+	Content    types.String `tfsdk:"content"`
+	UpdatedOn  types.String `tfsdk:"updated_on"`
+	Group      types.String `tfsdk:"group"`
+	Host       types.String `tfsdk:"host"`
+}
+
+func NewDNSRecordsDataSource() datasource.DataSource {
+	return &dnsRecordsDataSource{}
+}
+
+func (d *dnsRecordsDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_dns_records"
+}
+
+func (d *dnsRecordsDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Description: "Get DNS records from Dynu for the domain resolved from a hostname.",
+		Attributes: map[string]schema.Attribute{
+			"hostname": schema.StringAttribute{
+				Required:    true,
+				Description: "Any hostname under the target root domain.",
+				Validators:  []validator.String{stringvalidator.LengthAtLeast(1)},
+			},
+			"domain_id":   schema.Int64Attribute{Computed: true},
+			"domain_name": schema.StringAttribute{Computed: true},
+			"records": schema.ListNestedAttribute{
+				Computed: true,
+				NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
+					"id":          schema.Int64Attribute{Computed: true},
+					"domain_id":   schema.Int64Attribute{Computed: true},
+					"domain_name": schema.StringAttribute{Computed: true},
+					"node_name":   schema.StringAttribute{Computed: true},
+					"hostname":    schema.StringAttribute{Computed: true},
+					"record_type": schema.StringAttribute{Computed: true},
+					"ttl":         schema.Int64Attribute{Computed: true},
+					"state":       schema.BoolAttribute{Computed: true},
+					"content":     schema.StringAttribute{Computed: true},
+					"updated_on":  schema.StringAttribute{Computed: true},
+					"group":       schema.StringAttribute{Computed: true},
+					"host":        schema.StringAttribute{Computed: true},
+				}},
+			},
+		},
+	}
+}
+
+func (d *dnsRecordsDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
+	if req.ProviderData == nil {
+		return
+	}
+	providerData, ok := req.ProviderData.(*providerData)
+	if !ok {
+		resp.Diagnostics.AddError("Unexpected data source configure type", fmt.Sprintf("Expected *providerData, got %T", req.ProviderData))
+		return
+	}
+	d.clientProvider = providerData
+}
+
+func (d *dnsRecordsDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+	var state dnsRecordsDataSourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	domainID, domainName, err := d.clientProvider.client.GetRootDomain(ctx, state.Hostname.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to resolve Dynu domain from hostname", err.Error())
+		return
+	}
+
+	records, err := d.clientProvider.client.ListDNSRecords(ctx, domainID)
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to list Dynu DNS records", err.Error())
+		return
+	}
+
+	state.DomainID = types.Int64Value(domainID)
+	state.DomainName = types.StringValue(domainName)
+	state.Records = make([]dnsRecordStateItem, 0, len(records))
+	for _, record := range records {
+		state.Records = append(state.Records, dnsRecordStateItem{
+			ID:         types.Int64Value(record.ID),
+			DomainID:   types.Int64Value(record.DomainID),
+			DomainName: mapString(record.DomainName),
+			NodeName:   mapString(record.NodeName),
+			Hostname:   mapString(record.Hostname),
+			RecordType: mapString(record.RecordType),
+			TTL:        types.Int64Value(record.TTL),
+			State:      types.BoolValue(record.State),
+			Content:    mapString(record.Content),
+			UpdatedOn:  mapString(record.UpdatedOn),
+			Group:      mapString(record.Group),
+			Host:       mapString(record.Host),
+		})
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+}
