@@ -65,6 +65,13 @@ See the `examples/` directory:
 - `./scripts/check.sh` - formatting, vet, and unit tests
 - `./scripts/testacc.sh` - acceptance tests only
 
+### Standalone repository guarantee
+
+This repository is intentionally self-contained:
+- no dependency on sibling repositories
+- no dependency on external helper scripts (for example `services-up.sh`)
+- no hardcoded local paths (for example `/workspace/...` or `/home/...`)
+
 ### Build
 
 ```bash

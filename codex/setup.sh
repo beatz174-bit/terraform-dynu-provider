@@ -8,6 +8,7 @@ source "$SCRIPT_DIR/lib.sh"
 cd_repo_root
 
 log "Preparing repository-local Codex environment in $(pwd)"
+log "Using standalone setup (no external repositories or helper scripts required)"
 
 for cmd in bash git; do
   have "$cmd" || die "$cmd is required"
