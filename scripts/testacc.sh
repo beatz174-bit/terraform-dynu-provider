@@ -12,8 +12,8 @@ if [[ -z "${DYNU_API_KEY:-}" ]]; then
 fi
 
 if [[ -z "${DYNU_DOMAIN:-}" ]]; then
-  echo "[testacc][info] DYNU_DOMAIN is not set; running baseline acceptance scaffolding"
+  echo "[testacc][warn] DYNU_DOMAIN not set; domain-specific acceptance tests will skip"
 fi
 
-echo "[testacc] Running acceptance tests"
-go test ./internal/provider -run TestAcc -count=1
+echo "[testacc] running acceptance tests"
+go test ./internal/provider -run '^TestAcc' -count=1 -v

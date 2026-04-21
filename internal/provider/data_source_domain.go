@@ -3,9 +3,9 @@ package provider
 import (
 	"context"
 	"fmt"
+	"regexp"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
-	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -17,6 +17,8 @@ var (
 	_ datasource.DataSource              = &domainDataSource{}
 	_ datasource.DataSourceWithConfigure = &domainDataSource{}
 )
+
+var hostnameValidator = regexp.MustCompile(`^([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$`)
 
 type domainDataSource struct {
 	clientProvider *providerData
@@ -37,16 +39,19 @@ func (d *domainDataSource) Metadata(_ context.Context, req datasource.MetadataRe
 
 func (d *domainDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Get a Dynu DNS domain by hostname.",
+		Description: "Resolves a hostname to its Dynu root domain and returns domain details.",
 		Attributes: map[string]schema.Attribute{
 			"hostname": schema.StringAttribute{
 				Required:    true,
-				Description: "Hostname to resolve to a root domain.",
-				Validators:  []validator.String{stringvalidator.LengthAtLeast(1)},
+				Description: "Fully-qualified hostname, such as www.example.com.",
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
+					stringvalidator.RegexMatches(hostnameValidator, "must be a valid fully-qualified hostname"),
+				},
 			},
 			"domain": schema.SingleNestedAttribute{
 				Computed:    true,
-				Description: "Resolved Dynu DNS domain details.",
+				Description: "Dynu root domain details for the supplied hostname.",
 				Attributes:  domainAttributes(),
 			},
 		},
@@ -75,7 +80,7 @@ func (d *domainDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 	}
 
 	if state.Hostname.IsUnknown() || state.Hostname.IsNull() {
-		resp.Diagnostics.AddAttributeError(path.Root("hostname"), "Invalid hostname", "hostname must be known and non-null.")
+		resp.Diagnostics.AddAttributeError(path.Root("hostname"), "Invalid hostname", "The hostname must be known and non-null.")
 		return
 	}
 
@@ -91,47 +96,7 @@ func (d *domainDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 		return
 	}
 
-	domainValue := mapDomain(*domain)
-	domainObject, diags := types.ObjectValue(
-		map[string]attr.Type{
-			"id":                  types.Int64Type,
-			"name":                types.StringType,
-			"unicode_name":        types.StringType,
-			"token":               types.StringType,
-			"state":               types.StringType,
-			"group":               types.StringType,
-			"ipv4_address":        types.StringType,
-			"ipv6_address":        types.StringType,
-			"ttl":                 types.Int64Type,
-			"ipv4":                types.BoolType,
-			"ipv6":                types.BoolType,
-			"ipv4_wildcard_alias": types.BoolType,
-			"ipv6_wildcard_alias": types.BoolType,
-			"allow_zone_transfer": types.BoolType,
-			"dnssec":              types.BoolType,
-			"created_on":          types.StringType,
-			"updated_on":          types.StringType,
-		},
-		map[string]attr.Value{
-			"id":                  domainValue.ID,
-			"name":                domainValue.Name,
-			"unicode_name":        domainValue.UnicodeName,
-			"token":               domainValue.Token,
-			"state":               domainValue.State,
-			"group":               domainValue.Group,
-			"ipv4_address":        domainValue.IPv4Address,
-			"ipv6_address":        domainValue.IPv6Address,
-			"ttl":                 domainValue.TTL,
-			"ipv4":                domainValue.IPv4,
-			"ipv6":                domainValue.IPv6,
-			"ipv4_wildcard_alias": domainValue.IPv4WildcardAlias,
-			"ipv6_wildcard_alias": domainValue.IPv6WildcardAlias,
-			"allow_zone_transfer": domainValue.AllowZoneTransfer,
-			"dnssec":              domainValue.DNSSEC,
-			"created_on":          domainValue.CreatedOn,
-			"updated_on":          domainValue.UpdatedOn,
-		},
-	)
+	domainObject, diags := domainObjectValue(*domain)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return

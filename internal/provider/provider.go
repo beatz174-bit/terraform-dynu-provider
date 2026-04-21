@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"os"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -21,7 +22,8 @@ type dynuProvider struct {
 }
 
 type dynuProviderModel struct {
-	APIKey types.String `tfsdk:"api_key"`
+	APIKey  types.String `tfsdk:"api_key"`
+	BaseURL types.String `tfsdk:"base_url"`
 }
 
 type providerData struct {
@@ -41,12 +43,16 @@ func (p *dynuProvider) Metadata(_ context.Context, _ provider.MetadataRequest, r
 
 func (p *dynuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Terraform provider for Dynu DNS read-only operations.",
+		Description: "Terraform provider for Dynu DNS read-only data sources.",
 		Attributes: map[string]schema.Attribute{
 			"api_key": schema.StringAttribute{
 				Optional:    true,
 				Sensitive:   true,
-				Description: "Dynu API key. Can also be provided using DYNU_API_KEY.",
+				Description: "Dynu API key. If omitted, the provider uses the DYNU_API_KEY environment variable.",
+			},
+			"base_url": schema.StringAttribute{
+				Optional:    true,
+				Description: "Override Dynu API base URL. Primarily intended for automated tests.",
 			},
 		},
 	}
@@ -60,23 +66,26 @@ func (p *dynuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		return
 	}
 
-	apiKey := os.Getenv("DYNU_API_KEY")
-	if !data.APIKey.IsNull() {
-		apiKey = data.APIKey.ValueString()
-	}
-
+	apiKey := resolveAPIKey(data.APIKey, os.Getenv("DYNU_API_KEY"))
 	if apiKey == "" {
 		resp.Diagnostics.AddAttributeError(
 			path.Root("api_key"),
 			"Missing Dynu API key",
-			"Set api_key in the provider configuration or DYNU_API_KEY in the environment.",
+			"Configure api_key in the provider block or set the DYNU_API_KEY environment variable.",
 		)
 		return
 	}
 
-	providerData := &providerData{client: dynuclient.New(apiKey)}
+	providerData := &providerData{client: newDynuClient(apiKey, data.BaseURL)}
 	resp.DataSourceData = providerData
 	resp.ResourceData = nil
+}
+
+func resolveAPIKey(configValue types.String, envValue string) string {
+	if !configValue.IsNull() && !configValue.IsUnknown() {
+		return strings.TrimSpace(configValue.ValueString())
+	}
+	return strings.TrimSpace(envValue)
 }
 
 func (p *dynuProvider) DataSources(_ context.Context) []func() datasource.DataSource {
@@ -89,4 +98,12 @@ func (p *dynuProvider) DataSources(_ context.Context) []func() datasource.DataSo
 
 func (p *dynuProvider) Resources(_ context.Context) []func() resource.Resource {
 	return nil
+}
+
+func newDynuClient(apiKey string, baseURL types.String) *dynuclient.Client {
+	if !baseURL.IsNull() && !baseURL.IsUnknown() && strings.TrimSpace(baseURL.ValueString()) != "" {
+		return dynuclient.New(apiKey, dynuclient.WithBaseURL(strings.TrimSpace(baseURL.ValueString())))
+	}
+
+	return dynuclient.New(apiKey)
 }
