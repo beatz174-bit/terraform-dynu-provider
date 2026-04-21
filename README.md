@@ -1,23 +1,28 @@
 # terraform-provider-dynu
 
-Terraform provider for Dynu DNS using the Terraform Plugin Framework.
+A standalone Terraform provider for [Dynu](https://www.dynu.com/) DNS data.
 
-> Current phase is **read-only**: this provider implements provider configuration and data sources only.
+> Current phase: **read-only**. This provider supports provider configuration and data sources only.
 
-## Features
+## Feature scope
 
-- Provider configuration with API key authentication.
-- Environment variable support (`DYNU_API_KEY`).
+Implemented:
+- Provider authentication via API key
+- Environment variable support (`DYNU_API_KEY`)
 - Read-only data sources:
   - `dynu_domains`
   - `dynu_domain`
   - `dynu_dns_records`
 
+Not implemented in this phase:
+- Terraform resources
+- Any create/update/delete operations
+
 ## Requirements
 
-- Terraform >= 1.5
-- Go >= 1.22 (for building)
-- A Dynu API key
+- [Terraform](https://developer.hashicorp.com/terraform/downloads) `>= 1.5`
+- [Go](https://go.dev/dl/) `>= 1.23` (for building and testing)
+- Dynu API key
 
 ## Provider configuration
 
@@ -25,23 +30,28 @@ Terraform provider for Dynu DNS using the Terraform Plugin Framework.
 provider "dynu" {
   api_key = var.dynu_api_key
 }
+
+variable "dynu_api_key" {
+  type      = string
+  sensitive = true
+}
 ```
 
-You can also omit `api_key` and set `DYNU_API_KEY` in your environment.
+You can omit `api_key` in Terraform configuration and set the environment variable instead:
 
-## Data sources
+```bash
+export DYNU_API_KEY="your-dynu-api-key"
+```
+
+## Data source usage
 
 ### dynu_domains
-
-Returns all DNS domains associated with the account.
 
 ```hcl
 data "dynu_domains" "all" {}
 ```
 
 ### dynu_domain
-
-Resolves the root domain from a hostname, then returns full domain details.
 
 ```hcl
 data "dynu_domain" "selected" {
@@ -51,34 +61,52 @@ data "dynu_domain" "selected" {
 
 ### dynu_dns_records
 
-Resolves the root domain from a hostname, then returns DNS records for that domain.
-
 ```hcl
 data "dynu_dns_records" "records" {
   hostname = "www.example.com"
 }
 ```
 
-## Development
+## Build
 
 ```bash
-./codex/setup.sh
-./codex/maintain.sh
+go build ./...
 ```
 
-Run tests:
+## Test
+
+Run formatting and unit tests:
+
+```bash
+./scripts/check.sh
+```
+
+Or run unit tests directly:
 
 ```bash
 go test ./...
 ```
 
-Acceptance tests (requires live Dynu credentials):
+## Acceptance tests
+
+Acceptance tests are opt-in and require live Dynu credentials.
 
 ```bash
-TF_ACC=1 DYNU_API_KEY=... go test ./internal/provider -run TestAcc
+TF_ACC=1 DYNU_API_KEY="your-dynu-api-key" ./scripts/testacc.sh
 ```
+
+Optional environment variable:
+- `DYNU_DOMAIN` (for future domain-specific acceptance test cases)
+
+## Developer workflow
+
+- `./scripts/setup-dev.sh` – validates required local tools
+- `./scripts/check.sh` – runs formatting and unit checks
+- `./scripts/testacc.sh` – runs acceptance tests
+
+Repository-local Codex helpers are also available under `codex/` for agent-oriented workflows.
 
 ## Limitations
 
-- No Terraform resources are implemented in this phase.
-- No write operations are supported by provider code in this phase.
+- Read-only provider phase only
+- No writable Terraform resources yet
