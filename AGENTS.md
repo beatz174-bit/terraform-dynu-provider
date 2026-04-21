@@ -65,5 +65,3 @@ Create a provider skeleton that can compile and expose the provider plus read-on
 - Use `codex/doctor.sh` for troubleshooting.
 - Do not install global packages unless explicitly required.
 - Prefer repo-local state under `.codex/`.
-- Do not run `docker compose up`, `down`, or `pull` unless explicitly requested.
-- Safe validation via `./services-up.sh --profile all config` is allowed.
