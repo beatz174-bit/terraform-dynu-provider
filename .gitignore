@@ -33,3 +33,4 @@ go.work.sum
 
 *.tfvars
 !*.tfvars.example
+*.tfstate
