@@ -3,11 +3,13 @@ package fakedynu
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dynu/terraform-provider-dynu/internal/dynuclient"
 )
@@ -39,6 +41,7 @@ type Server struct {
 	fixture    Fixture
 	errors     map[string]APIError
 	rawPayload map[string]rawResponse
+	nextIDs    map[int64]int64
 }
 
 type rawResponse struct {
@@ -46,10 +49,21 @@ type rawResponse struct {
 	body       string
 }
 
+type dnsRecordUpsertRequest struct {
+	NodeName   string `json:"nodeName"`
+	RecordType string `json:"recordType"`
+	Content    string `json:"content"`
+	TTL        int64  `json:"ttl"`
+	State      *bool  `json:"state"`
+	Group      string `json:"group"`
+	Host       string `json:"host"`
+}
+
 func NewServer() *Server {
 	s := &Server{
 		errors:     map[string]APIError{},
 		rawPayload: map[string]rawResponse{},
+		nextIDs:    map[int64]int64{},
 		fixture: Fixture{
 			Domains: []dynuclient.Domain{
 				{ID: 2002, Name: "z.example.com", UnicodeName: "z.example.com", TTL: 60, CreatedOn: "2024-01-03T00:00:00", UpdatedOn: "2024-01-04T00:00:00"},
@@ -68,6 +82,7 @@ func NewServer() *Server {
 		},
 	}
 
+	s.reseedNextIDs()
 	s.Server = httptest.NewServer(http.HandlerFunc(s.serveHTTP))
 	return s
 }
@@ -80,6 +95,7 @@ func (s *Server) SetFixture(fixture Fixture) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.fixture = fixture
+	s.reseedNextIDs()
 }
 
 func (s *Server) SetAPIError(path string, apiErr APIError) {
@@ -94,14 +110,22 @@ func (s *Server) SetRawResponse(path string, httpStatus int, body string) {
 	s.rawPayload[path] = rawResponse{httpStatus: httpStatus, body: body}
 }
 
-func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
+func (s *Server) DeleteRecord(domainID int64, recordID int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	records := s.fixture.RecordsByDomain[domainID]
+	updated := make([]dynuclient.DNSRecord, 0, len(records))
+	for _, record := range records {
+		if record.ID != recordID {
+			updated = append(updated, record)
+		}
 	}
+	s.fixture.RecordsByDomain[domainID] = updated
+}
 
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	if raw, ok := s.rawPayload[r.URL.Path]; ok {
 		w.Header().Set("Content-Type", "application/json")
@@ -116,10 +140,10 @@ func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch {
-	case r.URL.Path == "/dns":
+	case r.Method == http.MethodGet && r.URL.Path == "/dns":
 		s.writeJSON(w, http.StatusOK, map[string]any{"statusCode": 200, "domains": s.fixture.Domains})
 		return
-	case strings.HasPrefix(r.URL.Path, "/dns/getroot/"):
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/dns/getroot/"):
 		hostname := strings.TrimPrefix(r.URL.Path, "/dns/getroot/")
 		root, ok := s.fixture.RootsByHostname[hostname]
 		if !ok {
@@ -134,35 +158,264 @@ func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			"node":       root.Node,
 		})
 		return
-	case strings.HasSuffix(r.URL.Path, "/record"):
-		domainID, err := domainIDFromPath(strings.TrimSuffix(r.URL.Path, "/record"))
-		if err != nil {
-			s.writeAPIError(w, APIError{HTTPStatus: http.StatusBadRequest, StatusCode: 400, Type: "Validation Exception", Message: err.Error()})
-			return
-		}
-		records, ok := s.fixture.RecordsByDomain[domainID]
-		if !ok {
-			records = []dynuclient.DNSRecord{}
-		}
-		s.writeJSON(w, http.StatusOK, map[string]any{"statusCode": 200, "dnsRecords": records})
+	case strings.HasPrefix(r.URL.Path, "/dns/"):
+		s.serveDNSPath(w, r)
 		return
 	default:
-		domainID, err := domainIDFromPath(r.URL.Path)
-		if err != nil {
-			s.writeAPIError(w, APIError{HTTPStatus: http.StatusNotFound, StatusCode: 404, Type: "Not Found", Message: "endpoint not found"})
+		s.writeAPIError(w, APIError{HTTPStatus: http.StatusNotFound, StatusCode: 404, Type: "Not Found", Message: "endpoint not found"})
+	}
+}
+
+func (s *Server) serveDNSPath(w http.ResponseWriter, r *http.Request) {
+	trimmed := strings.TrimPrefix(r.URL.Path, "/dns/")
+	segments := strings.Split(trimmed, "/")
+	if len(segments) == 1 {
+		s.serveDomainByID(w, r.Method, segments[0])
+		return
+	}
+
+	if len(segments) >= 2 && segments[1] == "record" {
+		s.serveRecordRoutes(w, r, segments)
+		return
+	}
+
+	s.writeAPIError(w, APIError{HTTPStatus: http.StatusNotFound, StatusCode: 404, Type: "Not Found", Message: "endpoint not found"})
+}
+
+func (s *Server) serveDomainByID(w http.ResponseWriter, method string, rawDomainID string) {
+	if method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	domainID, err := strconv.ParseInt(rawDomainID, 10, 64)
+	if err != nil {
+		s.writeAPIError(w, APIError{HTTPStatus: http.StatusBadRequest, StatusCode: 400, Type: "Validation Exception", Message: "invalid domain id: " + rawDomainID})
+		return
+	}
+	for _, domain := range s.fixture.Domains {
+		if domain.ID == domainID {
+			payload := map[string]any{"statusCode": 200}
+			b, _ := json.Marshal(domain)
+			_ = json.Unmarshal(b, &payload)
+			s.writeJSON(w, http.StatusOK, payload)
 			return
 		}
-		for _, domain := range s.fixture.Domains {
-			if domain.ID == domainID {
-				payload := map[string]any{"statusCode": 200}
-				b, _ := json.Marshal(domain)
-				_ = json.Unmarshal(b, &payload)
-				s.writeJSON(w, http.StatusOK, payload)
-				return
+	}
+	s.writeAPIError(w, APIError{HTTPStatus: http.StatusNotFound, StatusCode: 404, Type: "Not Found", Message: "domain not found"})
+}
+
+func (s *Server) serveRecordRoutes(w http.ResponseWriter, r *http.Request, segments []string) {
+	domainID, err := strconv.ParseInt(segments[0], 10, 64)
+	if err != nil {
+		s.writeAPIError(w, APIError{HTTPStatus: http.StatusBadRequest, StatusCode: 400, Type: "Validation Exception", Message: "invalid domain id: " + segments[0]})
+		return
+	}
+
+	if len(segments) == 2 {
+		switch r.Method {
+		case http.MethodGet:
+			records := s.fixture.RecordsByDomain[domainID]
+			if records == nil {
+				records = []dynuclient.DNSRecord{}
+			}
+			s.writeJSON(w, http.StatusOK, map[string]any{"statusCode": 200, "dnsRecords": records})
+			return
+		case http.MethodPost:
+			s.handleCreateRecord(w, r, domainID)
+			return
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+	}
+
+	if len(segments) == 3 {
+		recordID, err := strconv.ParseInt(segments[2], 10, 64)
+		if err != nil {
+			s.writeAPIError(w, APIError{HTTPStatus: http.StatusBadRequest, StatusCode: 400, Type: "Validation Exception", Message: "invalid record id: " + segments[2]})
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+			s.handleGetRecord(w, domainID, recordID)
+			return
+		case http.MethodPut:
+			s.handleUpdateRecord(w, r, domainID, recordID)
+			return
+		case http.MethodDelete:
+			s.handleDeleteRecord(w, domainID, recordID)
+			return
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+	}
+
+	s.writeAPIError(w, APIError{HTTPStatus: http.StatusNotFound, StatusCode: 404, Type: "Not Found", Message: "endpoint not found"})
+}
+
+func (s *Server) handleGetRecord(w http.ResponseWriter, domainID int64, recordID int64) {
+	record, _, ok := s.findRecord(domainID, recordID)
+	if !ok {
+		s.writeAPIError(w, APIError{HTTPStatus: http.StatusNotFound, StatusCode: 404, Type: "Not Found", Message: "record not found"})
+		return
+	}
+	s.writeRecord(w, record)
+}
+
+func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request, domainID int64) {
+	req, ok := s.decodeUpsertRequest(w, r)
+	if !ok {
+		return
+	}
+	if req.RecordType == "" || req.Content == "" {
+		s.writeAPIError(w, APIError{HTTPStatus: http.StatusBadRequest, StatusCode: 400, Type: "Validation Exception", Message: "recordType and content are required"})
+		return
+	}
+
+	domainName := s.domainName(domainID)
+	if domainName == "" {
+		s.writeAPIError(w, APIError{HTTPStatus: http.StatusNotFound, StatusCode: 404, Type: "Not Found", Message: "domain not found"})
+		return
+	}
+	state := true
+	if req.State != nil {
+		state = *req.State
+	}
+	ttl := req.TTL
+	if ttl <= 0 {
+		ttl = 90
+	}
+	record := dynuclient.DNSRecord{
+		ID:         s.nextRecordID(domainID),
+		DomainID:   domainID,
+		DomainName: domainName,
+		NodeName:   req.NodeName,
+		Hostname:   buildHostname(req.NodeName, domainName),
+		RecordType: req.RecordType,
+		State:      state,
+		TTL:        ttl,
+		Content:    req.Content,
+		UpdatedOn:  time.Now().UTC().Format(time.RFC3339),
+		Group:      req.Group,
+		Host:       req.Host,
+	}
+
+	s.fixture.RecordsByDomain[domainID] = append(s.fixture.RecordsByDomain[domainID], record)
+	s.writeRecord(w, record)
+}
+
+func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request, domainID int64, recordID int64) {
+	req, ok := s.decodeUpsertRequest(w, r)
+	if !ok {
+		return
+	}
+	record, idx, found := s.findRecord(domainID, recordID)
+	if !found {
+		s.writeAPIError(w, APIError{HTTPStatus: http.StatusNotFound, StatusCode: 404, Type: "Not Found", Message: "record not found"})
+		return
+	}
+
+	record.NodeName = req.NodeName
+	record.RecordType = req.RecordType
+	record.Content = req.Content
+	if req.TTL > 0 {
+		record.TTL = req.TTL
+	}
+	if req.State != nil {
+		record.State = *req.State
+	}
+	record.Group = req.Group
+	record.Host = req.Host
+	record.Hostname = buildHostname(req.NodeName, record.DomainName)
+	record.UpdatedOn = time.Now().UTC().Format(time.RFC3339)
+
+	s.fixture.RecordsByDomain[domainID][idx] = record
+	s.writeRecord(w, record)
+}
+
+func (s *Server) handleDeleteRecord(w http.ResponseWriter, domainID int64, recordID int64) {
+	_, idx, ok := s.findRecord(domainID, recordID)
+	if !ok {
+		s.writeAPIError(w, APIError{HTTPStatus: http.StatusNotFound, StatusCode: 404, Type: "Not Found", Message: "record not found"})
+		return
+	}
+
+	records := s.fixture.RecordsByDomain[domainID]
+	s.fixture.RecordsByDomain[domainID] = append(records[:idx], records[idx+1:]...)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) decodeUpsertRequest(w http.ResponseWriter, r *http.Request) (dnsRecordUpsertRequest, bool) {
+	payload, err := io.ReadAll(r.Body)
+	if err != nil {
+		s.writeAPIError(w, APIError{HTTPStatus: http.StatusBadRequest, StatusCode: 400, Type: "Validation Exception", Message: "unable to read request body"})
+		return dnsRecordUpsertRequest{}, false
+	}
+	defer r.Body.Close()
+
+	var req dnsRecordUpsertRequest
+	if err := json.Unmarshal(payload, &req); err != nil {
+		s.writeAPIError(w, APIError{HTTPStatus: http.StatusBadRequest, StatusCode: 400, Type: "Validation Exception", Message: "invalid json payload"})
+		return dnsRecordUpsertRequest{}, false
+	}
+	return req, true
+}
+
+func (s *Server) findRecord(domainID int64, recordID int64) (dynuclient.DNSRecord, int, bool) {
+	records := s.fixture.RecordsByDomain[domainID]
+	for idx, record := range records {
+		if record.ID == recordID {
+			return record, idx, true
+		}
+	}
+	return dynuclient.DNSRecord{}, -1, false
+}
+
+func (s *Server) writeRecord(w http.ResponseWriter, record dynuclient.DNSRecord) {
+	payload := map[string]any{"statusCode": 200}
+	b, _ := json.Marshal(record)
+	_ = json.Unmarshal(b, &payload)
+	s.writeJSON(w, http.StatusOK, payload)
+}
+
+func (s *Server) domainName(domainID int64) string {
+	for _, domain := range s.fixture.Domains {
+		if domain.ID == domainID {
+			return domain.Name
+		}
+	}
+	return ""
+}
+
+func (s *Server) nextRecordID(domainID int64) int64 {
+	nextID := s.nextIDs[domainID]
+	if nextID == 0 {
+		nextID = 1
+	}
+	s.nextIDs[domainID] = nextID + 1
+	return nextID
+}
+
+func (s *Server) reseedNextIDs() {
+	s.nextIDs = map[int64]int64{}
+	for domainID, records := range s.fixture.RecordsByDomain {
+		maxID := int64(0)
+		for _, record := range records {
+			if record.ID > maxID {
+				maxID = record.ID
 			}
 		}
-		s.writeAPIError(w, APIError{HTTPStatus: http.StatusNotFound, StatusCode: 404, Type: "Not Found", Message: "domain not found"})
+		s.nextIDs[domainID] = maxID + 1
 	}
+}
+
+func buildHostname(nodeName string, domainName string) string {
+	nodeName = strings.TrimSpace(nodeName)
+	if nodeName == "" || nodeName == "@" {
+		return domainName
+	}
+	return nodeName + "." + domainName
 }
 
 func domainIDFromPath(path string) (int64, error) {
