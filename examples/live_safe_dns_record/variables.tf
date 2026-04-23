@@ -16,6 +16,12 @@ variable "test_prefix" {
   default     = "tfacc"
 }
 
+variable "test_suffix" {
+  description = "Suffix for disposable hostname uniqueness (set explicitly per run if needed)."
+  type        = string
+  default     = "manual"
+}
+
 variable "test_ip" {
   description = "Safe documentation/test IPv4 value for the disposable A record."
   type        = string

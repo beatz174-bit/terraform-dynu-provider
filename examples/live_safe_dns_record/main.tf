@@ -3,11 +3,6 @@ terraform {
     dynu = {
       source = "dynu/dynu"
     }
-
-    random = {
-      source  = "hashicorp/random"
-      version = ">= 3.6.0"
-    }
   }
 }
 
@@ -15,12 +10,8 @@ provider "dynu" {
   api_key = var.dynu_api_key
 }
 
-resource "random_id" "suffix" {
-  byte_length = 4
-}
-
 locals {
-  disposable_label    = "${var.test_prefix}-${lower(random_id.suffix.hex)}"
+  disposable_label    = "${var.test_prefix}-${var.test_suffix}"
   disposable_hostname = "${local.disposable_label}.${var.dynu_root_domain}"
 }
 

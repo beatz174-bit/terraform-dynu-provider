@@ -6,9 +6,9 @@ then you remove it with `terraform destroy`.
 
 ## Safety model
 
-- Creates a **new unique subdomain** every run using `random_id`.
+- Creates a **new disposable subdomain** using configurable `test_prefix` and `test_suffix` values.
 - Hostname format is:
-  - `<test_prefix>-<random_hex>.<dynu_root_domain>`
+  - `<test_prefix>-<test_suffix>.<dynu_root_domain>`
 - Creates exactly one record:
   - `A` record, default content `198.51.100.10`, default TTL `300`.
 - Does **not** import, update, replace, or delete existing production hostnames/records.
@@ -27,27 +27,31 @@ then you remove it with `terraform destroy`.
 
 ## Workflow
 
+This example intentionally uses only the `dynu/dynu` provider (no `hashicorp/random`).
+If you want per-run uniqueness, pass `test_suffix` explicitly.
+
 ```bash
 go build -o terraform-provider-dynu
 cd examples/live_safe_dns_record
 cp terraform.tfvars.example terraform.tfvars
-# edit terraform.tfvars and set only dynu_root_domain
+# edit terraform.tfvars and set dynu_root_domain (and optionally test_suffix)
 terraform validate
-terraform plan
-terraform apply
+TEST_SUFFIX="$(date +%s)"
+terraform plan -var="test_suffix=${TEST_SUFFIX}"
+terraform apply -var="test_suffix=${TEST_SUFFIX}"
 ```
 
-After apply, inspect outputs to confirm the generated disposable hostname and record ID,
-then clean up:
+After apply, inspect outputs to confirm the disposable hostname and record ID,
+then clean up using the **same** suffix value:
 
 ```bash
-terraform destroy
+terraform destroy -var="test_suffix=${TEST_SUFFIX}"
 ```
 
 ## Cleanup guidance
 
 - Always run `terraform destroy` after testing.
 - If apply is interrupted or partially succeeds, rerun `terraform destroy` from this same
-  directory with the same `terraform.tfvars` and state files.
+  directory with the same `terraform.tfvars`, CLI vars, and state files.
 - If re-running without destroying first, Terraform may keep state for the previous
   disposable record until it is destroyed.
