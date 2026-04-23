@@ -1,5 +1,5 @@
 output "disposable_hostname" {
-  description = "Generated unique disposable hostname created by this run."
+  description = "Disposable hostname created by this run."
   value       = local.disposable_hostname
 }
 
