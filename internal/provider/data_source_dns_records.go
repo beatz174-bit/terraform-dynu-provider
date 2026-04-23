@@ -100,20 +100,18 @@ func (d *dnsRecordsDataSource) Configure(_ context.Context, req datasource.Confi
 }
 
 func (d *dnsRecordsDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	var config struct {
-		Hostname types.String `tfsdk:"hostname"`
-	}
-	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	var hostname types.String
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("hostname"), &hostname)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	if config.Hostname.IsUnknown() || config.Hostname.IsNull() {
+	if hostname.IsUnknown() || hostname.IsNull() {
 		resp.Diagnostics.AddAttributeError(path.Root("hostname"), "Invalid hostname", "The hostname must be known and non-null.")
 		return
 	}
 
-	domainID, domainName, err := d.clientProvider.client.GetRootDomain(ctx, config.Hostname.ValueString())
+	domainID, domainName, err := d.clientProvider.client.GetRootDomain(ctx, hostname.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(diagnosticSummary("Unable to resolve Dynu domain from hostname", err), err.Error())
 		return
@@ -128,7 +126,7 @@ func (d *dnsRecordsDataSource) Read(ctx context.Context, req datasource.ReadRequ
 	sortDNSRecords(records)
 
 	state := dnsRecordsDataSourceModel{
-		Hostname:   config.Hostname,
+		Hostname:   hostname,
 		DomainID:   types.Int64Value(domainID),
 		DomainName: types.StringValue(domainName),
 		Records:    make([]dnsRecordStateItem, 0, len(records)),
