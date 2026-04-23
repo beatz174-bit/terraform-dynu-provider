@@ -36,15 +36,16 @@ cd examples/live_safe_dns_record
 cp terraform.tfvars.example terraform.tfvars
 # edit terraform.tfvars and set dynu_root_domain (and optionally test_suffix)
 terraform validate
-terraform plan -var="test_suffix=$(date +%s)"
-terraform apply -var="test_suffix=$(date +%s)"
+TEST_SUFFIX="$(date +%s)"
+terraform plan -var="test_suffix=${TEST_SUFFIX}"
+terraform apply -var="test_suffix=${TEST_SUFFIX}"
 ```
 
 After apply, inspect outputs to confirm the disposable hostname and record ID,
-then clean up:
+then clean up using the **same** suffix value:
 
 ```bash
-terraform destroy -var="test_suffix=$(date +%s)"
+terraform destroy -var="test_suffix=${TEST_SUFFIX}"
 ```
 
 ## Cleanup guidance
