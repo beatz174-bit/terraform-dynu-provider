@@ -4,3 +4,4 @@
 
 # Use a hostname that exists in your Dynu account.
 hostname = "www.example.com"
+dynu_api_key = "APIK_KEY"
