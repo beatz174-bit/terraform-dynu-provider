@@ -18,4 +18,11 @@ go vet ./...
 echo "[check] running go test"
 go test ./...
 
+if command -v terraform >/dev/null 2>&1; then
+  echo "[check] running terraform fmt check for examples/"
+  terraform fmt -check -recursive examples
+else
+  echo "[check][warn] terraform not found; skipping examples/ checks" >&2
+fi
+
 echo "[check] complete"
