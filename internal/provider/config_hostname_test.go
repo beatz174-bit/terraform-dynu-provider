@@ -16,7 +16,7 @@ func TestHostnameFromConfigIgnoresComputedAttributesDomain(t *testing.T) {
 
 	configType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
 		"hostname": tftypes.String,
-		"domain": tftypes.DynamicPseudoType,
+		"domain":   tftypes.DynamicPseudoType,
 	}}
 	configValue := tftypes.NewValue(configType, map[string]tftypes.Value{
 		"hostname": tftypes.NewValue(tftypes.String, "www.example.com"),
