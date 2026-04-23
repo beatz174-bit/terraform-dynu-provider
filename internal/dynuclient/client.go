@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -189,6 +190,9 @@ func (c *Client) ListDNSRecords(ctx context.Context, domainID int64) ([]DNSRecor
 	if err := c.doRequest(ctx, http.MethodGet, fmt.Sprintf("/dns/%d/record", domainID), nil, &resp); err != nil {
 		return nil, err
 	}
+	for i := range resp.DNSRecords {
+		normalizeDNSRecord(&resp.DNSRecords[i])
+	}
 	return resp.DNSRecords, nil
 }
 
@@ -197,6 +201,7 @@ func (c *Client) GetDNSRecord(ctx context.Context, domainID int64, recordID int6
 	if err := c.doRequest(ctx, http.MethodGet, fmt.Sprintf("/dns/%d/record/%d", domainID, recordID), nil, &resp); err != nil {
 		return nil, err
 	}
+	normalizeDNSRecord(&resp.DNSRecord)
 	return &resp.DNSRecord, nil
 }
 
@@ -205,6 +210,7 @@ func (c *Client) CreateDNSRecord(ctx context.Context, domainID int64, req Create
 	if err := c.doRequest(ctx, http.MethodPost, fmt.Sprintf("/dns/%d/record", domainID), buildDNSRecordUpsertPayload(req.RecordType, req.NodeName, req.Content, req.TTL, req.State, req.Group, req.Host), &resp); err != nil {
 		return nil, err
 	}
+	normalizeDNSRecord(&resp.DNSRecord)
 	return &resp.DNSRecord, nil
 }
 
@@ -213,6 +219,7 @@ func (c *Client) UpdateDNSRecord(ctx context.Context, domainID int64, recordID i
 	if err := c.doRequest(ctx, http.MethodPut, fmt.Sprintf("/dns/%d/record/%d", domainID, recordID), buildDNSRecordUpsertPayload(req.RecordType, req.NodeName, req.Content, req.TTL, req.State, req.Group, req.Host), &resp); err != nil {
 		return nil, err
 	}
+	normalizeDNSRecord(&resp.DNSRecord)
 	return &resp.DNSRecord, nil
 }
 
@@ -337,4 +344,19 @@ func buildDNSRecordUpsertPayload(recordType string, nodeName string, content str
 	}
 
 	return payload
+}
+
+var zoneStyleContentPattern = regexp.MustCompile(`(?i)^\S+\.\s+\d+\s+IN\s+\S+\s+(.+)$`)
+
+func normalizeDNSRecord(record *DNSRecord) {
+	if record == nil {
+		return
+	}
+
+	matches := zoneStyleContentPattern.FindStringSubmatch(strings.TrimSpace(record.Content))
+	if len(matches) != 2 {
+		return
+	}
+
+	record.Content = strings.TrimSpace(matches[1])
 }

@@ -191,6 +191,43 @@ func TestClientCreateDNSRecordSendsIPv4AddressForARecord(t *testing.T) {
 	}
 }
 
+func TestClientCreateDNSRecordNormalizesZoneStyleContent(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/dns/1001/record" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"statusCode": 200,
+			"id":         10,
+			"domainId":   1001,
+			"domainName": "example.com",
+			"nodeName":   "www",
+			"hostname":   "www.example.com",
+			"recordType": "A",
+			"content":    "www.example.com. 300 IN A 167.179.167.166",
+			"ttl":        300,
+			"state":      true,
+		})
+	}))
+	defer server.Close()
+
+	client := dynuclient.New("test-key", dynuclient.WithBaseURL(server.URL), dynuclient.WithHTTPClient(server.Client()))
+	record, err := client.CreateDNSRecord(context.Background(), 1001, dynuclient.CreateDNSRecordRequest{
+		NodeName:   "www",
+		RecordType: "A",
+		Content:    "167.179.167.166",
+		TTL:        300,
+	})
+	if err != nil {
+		t.Fatalf("CreateDNSRecord() error = %v", err)
+	}
+
+	if record.Content != "167.179.167.166" {
+		t.Fatalf("expected normalized content, got %q", record.Content)
+	}
+}
+
 func TestClientDoRequestTopLevelAPIExceptionPayload(t *testing.T) {
 	fake := fakedynu.NewServer()
 	defer fake.Close()
