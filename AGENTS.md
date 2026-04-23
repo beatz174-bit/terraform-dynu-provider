@@ -56,3 +56,26 @@ Do not implement in this phase:
 
 ## Output expectations
 Changes should keep the provider idiomatic, easy to contribute to, and ready for public/open-source usage.
+
+## Agent instructions
+
+### Local validation for this repository
+
+This provider is not yet published to the Terraform Registry.
+
+For local development, Terraform must use the locally built provider binary via `dev_overrides`. Because of that, `terraform init` is **not** part of the normal validation loop for agents working in this repository.
+
+Use this loop instead:
+
+```bash
+go build -o terraform-provider-dynu
+cd examples/read_only
+terraform validate
+terraform plan
+```
+
+If provider configuration or code changes, rebuild the binary before running Terraform again.
+
+Do not infer that `terraform init` is required just because it is common in normal Terraform projects.
+
+Leave GitHub Actions, CI workflows, and CI test behavior unchanged for this documentation guidance.

@@ -35,7 +35,23 @@ terraform validate
 terraform plan
 ```
 
-> With `dev_overrides`, Terraform uses your local binary for `dynu/dynu`. `terraform init` is not the primary local-dev loop here and may still try registry/network operations.
+> [!WARNING]
+> Do not run `terraform init` as part of the normal Codex/local test loop for this repo. Because the provider is not yet published to the Terraform Registry, `init` may attempt registry/network resolution and fail or give misleading results. Use `dev_overrides`, rebuild the local binary, then run `terraform validate` and `terraform plan`.
+>
+> With `dev_overrides`, Terraform uses your local binary for `dynu/dynu`.
+
+### Codex/local validation loop
+
+Use this expected loop for local verification and Codex-driven validation:
+
+```bash
+go build -o terraform-provider-dynu
+cd examples/read_only
+terraform validate
+terraform plan
+```
+
+When provider configuration or code changes, rebuild the provider binary first, then re-run `terraform validate` and `terraform plan`.
 
 ## Copy/paste starter configuration
 
@@ -163,7 +179,7 @@ data "dynu_dns_records" "selected" {
 
 - **Stale provider binary after code changes**
   - Symptom: Terraform behavior doesn't reflect latest code.
-  - Fix: rebuild binary (`go build -o terraform-provider-dynu`) and run `terraform plan` again.
+  - Fix: rebuild binary (`go build -o terraform-provider-dynu`) and re-run `terraform validate` and `terraform plan`.
 
 ## Developer workflow
 
