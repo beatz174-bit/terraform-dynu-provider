@@ -97,9 +97,7 @@ func (p *dynuProvider) DataSources(_ context.Context) []func() datasource.DataSo
 }
 
 func (p *dynuProvider) Resources(_ context.Context) []func() resource.Resource {
-	return []func() resource.Resource{
-		NewDNSRecordResource,
-	}
+	return []func() resource.Resource{}
 }
 
 func newDynuClient(apiKey string, baseURL types.String) *dynuclient.Client {

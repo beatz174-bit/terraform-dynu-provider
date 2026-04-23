@@ -17,3 +17,27 @@ func TestParseDNSRecordIDInvalid(t *testing.T) {
 		t.Fatal("expected parse error")
 	}
 }
+
+func TestHostnameMatchesDomain(t *testing.T) {
+	testCases := []struct {
+		name      string
+		hostname  string
+		domain    string
+		wantMatch bool
+	}{
+		{name: "exact domain", hostname: "example.com", domain: "example.com", wantMatch: true},
+		{name: "subdomain", hostname: "www.example.com", domain: "example.com", wantMatch: true},
+		{name: "different root domain", hostname: "www.other.com", domain: "example.com", wantMatch: false},
+		{name: "partial suffix does not match", hostname: "badexample.com", domain: "example.com", wantMatch: false},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			got := hostnameMatchesDomain(tc.hostname, tc.domain)
+			if got != tc.wantMatch {
+				t.Fatalf("hostnameMatchesDomain(%q, %q) = %t, want %t", tc.hostname, tc.domain, got, tc.wantMatch)
+			}
+		})
+	}
+}

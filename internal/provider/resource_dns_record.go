@@ -9,10 +9,14 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 
 	"github.com/dynu/terraform-provider-dynu/internal/dynuclient"
 )
@@ -61,6 +65,21 @@ func (r *dnsRecordResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Validators: []validator.String{
 					stringvalidator.LengthAtLeast(1),
 					stringvalidator.RegexMatches(hostnameValidator, "must be a valid fully-qualified hostname"),
+				},
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplaceIf(
+						func(ctx context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+							var stateDomain basetypes.StringValue
+							diags := req.State.GetAttribute(ctx, path.Root("domain_name"), &stateDomain)
+							if diags.HasError() || stateDomain.IsNull() || stateDomain.IsUnknown() {
+								return
+							}
+							nextHostname := strings.TrimSpace(req.PlanValue.ValueString())
+							resp.RequiresReplace = !hostnameMatchesDomain(nextHostname, stateDomain.ValueString())
+						},
+						"hostname root domain changed",
+						"Changing hostname to a different root domain requires recreation so updates never target an unrelated Dynu domain.",
+					),
 				},
 			},
 			"record_type": schema.StringAttribute{Required: true, Description: "DNS record type (A, AAAA, CNAME, TXT, etc.).", Validators: []validator.String{stringvalidator.LengthAtLeast(1)}},
@@ -291,6 +310,18 @@ func recordNodeName(nodeName types.String, hostname types.String, domainName str
 		return strings.TrimSuffix(host, suffix)
 	}
 	return host
+}
+
+func hostnameMatchesDomain(hostname string, domainName string) bool {
+	host := strings.TrimSpace(hostname)
+	domain := strings.TrimSpace(domainName)
+	if host == "" || domain == "" {
+		return false
+	}
+	if strings.EqualFold(host, domain) {
+		return true
+	}
+	return strings.HasSuffix(strings.ToLower(host), "."+strings.ToLower(domain))
 }
 
 func int64FromOptional(value types.Int64) int64 {
