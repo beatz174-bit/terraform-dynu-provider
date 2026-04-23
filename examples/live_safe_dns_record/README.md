@@ -10,7 +10,7 @@ then you remove it with `terraform destroy`.
 - Hostname format is:
   - `<test_prefix>-<test_suffix>.<dynu_root_domain>`
 - Creates exactly one record:
-  - `A` record, default content `198.51.100.10`, default TTL `300`.
+  - `A` record, default content `1.1.1.1`, default TTL `300`.
 - Does **not** import, update, replace, or delete existing production hostnames/records.
 - `terraform destroy` removes only the disposable record in this state.
 
