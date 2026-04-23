@@ -59,6 +59,19 @@ Changes should keep the provider idiomatic, easy to contribute to, and ready for
 
 ## Agent instructions
 
+## Validation workflow (Codex and local)
+
+When you modify **Go** or **Terraform** files, always run this sequence before concluding work:
+
+1. `./scripts/fix.sh`
+2. `./scripts/check.sh`
+
+### Expectations
+- Do not leave formatting changes unapplied.
+- Do not hand-edit formatting that `gofmt` or `terraform fmt` can apply automatically.
+- Treat `./scripts/check.sh` as the required final validation gate.
+- If Terraform is unavailable in the environment, note that Terraform formatting/checking could not be run locally.
+
 ### Local validation for this repository
 
 This provider is not yet published to the Terraform Registry.

@@ -181,6 +181,18 @@ data "dynu_dns_records" "selected" {
   - Symptom: Terraform behavior doesn't reflect latest code.
   - Fix: rebuild binary (`go build -o terraform-provider-dynu`) and re-run `terraform validate` and `terraform plan`.
 
+## Development checks
+
+Before committing, run:
+
+```bash
+./scripts/fix.sh
+./scripts/check.sh
+```
+
+`fix.sh` applies standard formatting and module hygiene.  
+`check.sh` is the strict verification script used by CI.
+
 ## Developer workflow
 
 - `./scripts/setup-dev.sh` - validate local toolchain requirements
