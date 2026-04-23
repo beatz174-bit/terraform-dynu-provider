@@ -23,9 +23,9 @@ variable "test_suffix" {
 }
 
 variable "test_ip" {
-  description = "Safe documentation/test IPv4 value for the disposable A record."
+  description = "IPv4 value for the disposable A record. Dynu rejects reserved documentation ranges (for example 198.51.100.0/24), so this default uses a public resolver address."
   type        = string
-  default     = "198.51.100.10"
+  default     = "1.1.1.1"
 }
 
 variable "test_ttl" {

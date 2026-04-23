@@ -298,7 +298,7 @@ Live acceptance tests are opt-in and require:
 Use `examples/live_safe_dns_record` when you want to safely validate writable provider behavior against a real Dynu account.
 
 - This example creates a unique temporary subdomain in the form `<prefix>-<random>.<dynu_root_domain>`.
-- It creates exactly one disposable `A` record using an obviously non-production test IP by default.
+- It creates exactly one disposable `A` record using a default IPv4 value accepted by Dynu.
 - It is designed so `terraform destroy` removes only the created disposable record from that run/state.
 
 Safety guidance:
