@@ -1,0 +1,13 @@
+# Required: use only a Dynu-managed root domain/zone that you control.
+# Do NOT put an existing full production hostname here.
+dynu_root_domain = "example.com"
+
+# Optional prefix for generated disposable hostname labels.
+# Final hostname format: <test_prefix>-<random_hex>.<dynu_root_domain>
+test_prefix = "tfacc"
+
+# Optional: documentation/test IP for disposable A record content.
+test_ip = "198.51.100.10"
+
+# Optional TTL for disposable A record.
+test_ttl = 300

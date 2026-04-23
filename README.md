@@ -40,6 +40,16 @@ terraform validate
 terraform plan
 ```
 
+4. Run the live-safe write example (opt-in, creates a disposable DNS record only):
+
+```bash
+cd examples/live_safe_dns_record
+cp terraform.tfvars.example terraform.tfvars
+# set only dynu_root_domain to a Dynu-managed root zone you control
+terraform validate
+terraform plan
+```
+
 > [!WARNING]
 > Do not run `terraform init` as part of the normal Codex/local test loop for this repo. Because the provider is not yet published to the Terraform Registry, `init` may attempt registry/network resolution and fail or give misleading results. Use `dev_overrides`, rebuild the local binary, then run `terraform validate` and `terraform plan`.
 >
@@ -232,6 +242,7 @@ data "dynu_dns_records" "selected" {
 ## Examples
 
 - Runnable local workflow: `examples/read_only/`
+- Live-safe write lifecycle workflow: `examples/live_safe_dns_record/`
 - Provider block example: `examples/provider/provider.tf`
 - Individual data source snippets:
   - `examples/data-sources/dynu_domains/data-source.tf`
@@ -277,10 +288,23 @@ Before committing, run:
 - `./scripts/test-integration.sh` - local mock-backed provider integration tests
 - `./scripts/testacc.sh` - acceptance/integration test wrapper (live tests opt-in)
 
-Live acceptance tests are read-only and require:
+Live acceptance tests are opt-in and require:
 - `TF_ACC=1`
 - `DYNU_API_KEY`
 - optional `DYNU_DOMAIN` for domain-specific coverage
+
+### Live safe write testing
+
+Use `examples/live_safe_dns_record` when you want to safely validate writable provider behavior against a real Dynu account.
+
+- This example creates a unique temporary subdomain in the form `<prefix>-<random>.<dynu_root_domain>`.
+- It creates exactly one disposable `A` record using an obviously non-production test IP by default.
+- It is designed so `terraform destroy` removes only the created disposable record from that run/state.
+
+Safety guidance:
+- Set `dynu_root_domain` to a root Dynu-managed zone you control (for example `example.com`).
+- Do **not** supply or target an existing live full hostname you care about.
+- If apply is interrupted, rerun `terraform destroy` from the same directory/state to clean up.
 
 ## Feature scope
 
