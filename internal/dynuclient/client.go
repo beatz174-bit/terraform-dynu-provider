@@ -202,7 +202,7 @@ func (c *Client) GetDNSRecord(ctx context.Context, domainID int64, recordID int6
 
 func (c *Client) CreateDNSRecord(ctx context.Context, domainID int64, req CreateDNSRecordRequest) (*DNSRecord, error) {
 	var resp getDNSRecordResponse
-	if err := c.doRequest(ctx, http.MethodPost, fmt.Sprintf("/dns/%d/record", domainID), req, &resp); err != nil {
+	if err := c.doRequest(ctx, http.MethodPost, fmt.Sprintf("/dns/%d/record", domainID), buildDNSRecordUpsertPayload(req.RecordType, req.NodeName, req.Content, req.TTL, req.State, req.Group, req.Host), &resp); err != nil {
 		return nil, err
 	}
 	return &resp.DNSRecord, nil
@@ -210,7 +210,7 @@ func (c *Client) CreateDNSRecord(ctx context.Context, domainID int64, req Create
 
 func (c *Client) UpdateDNSRecord(ctx context.Context, domainID int64, recordID int64, req UpdateDNSRecordRequest) (*DNSRecord, error) {
 	var resp getDNSRecordResponse
-	if err := c.doRequest(ctx, http.MethodPut, fmt.Sprintf("/dns/%d/record/%d", domainID, recordID), req, &resp); err != nil {
+	if err := c.doRequest(ctx, http.MethodPut, fmt.Sprintf("/dns/%d/record/%d", domainID, recordID), buildDNSRecordUpsertPayload(req.RecordType, req.NodeName, req.Content, req.TTL, req.State, req.Group, req.Host), &resp); err != nil {
 		return nil, err
 	}
 	return &resp.DNSRecord, nil
@@ -277,13 +277,64 @@ func (c *Client) doRequest(ctx context.Context, method string, path string, requ
 
 func parseAPIException(payload []byte) error {
 	apiResult := apiResponse{}
-	if err := json.Unmarshal(payload, &apiResult); err != nil || apiResult.Exception == nil {
+	if err := json.Unmarshal(payload, &apiResult); err != nil {
+		return nil
+	}
+
+	if apiResult.Exception != nil {
+		return &APIError{
+			StatusCode: apiResult.Exception.StatusCode,
+			Type:       apiResult.Exception.Type,
+			Message:    apiResult.Exception.Message,
+		}
+	}
+
+	// Some Dynu responses surface API failures at the top level instead of under exception.
+	topLevel := apiException{}
+	if err := json.Unmarshal(payload, &topLevel); err != nil || topLevel.StatusCode == 0 || topLevel.Type == "" {
 		return nil
 	}
 
 	return &APIError{
-		StatusCode: apiResult.Exception.StatusCode,
-		Type:       apiResult.Exception.Type,
-		Message:    apiResult.Exception.Message,
+		StatusCode: topLevel.StatusCode,
+		Type:       topLevel.Type,
+		Message:    topLevel.Message,
 	}
+}
+
+type dnsRecordUpsertPayload struct {
+	NodeName    string `json:"nodeName,omitempty"`
+	RecordType  string `json:"recordType"`
+	Content     string `json:"content,omitempty"`
+	IPv4Address string `json:"ipv4Address,omitempty"`
+	IPv6Address string `json:"ipv6Address,omitempty"`
+	TTL         int64  `json:"ttl,omitempty"`
+	State       *bool  `json:"state,omitempty"`
+	Group       string `json:"group,omitempty"`
+	Host        string `json:"host,omitempty"`
+}
+
+func buildDNSRecordUpsertPayload(recordType string, nodeName string, content string, ttl int64, state *bool, group string, host string) dnsRecordUpsertPayload {
+	payload := dnsRecordUpsertPayload{
+		NodeName:   nodeName,
+		RecordType: recordType,
+		Content:    content,
+		TTL:        ttl,
+		State:      state,
+		Group:      group,
+		Host:       host,
+	}
+
+	switch strings.ToUpper(strings.TrimSpace(recordType)) {
+	case "A":
+		payload.IPv4Address = content
+	case "AAAA":
+		payload.IPv6Address = content
+	case "CNAME":
+		if payload.Host == "" {
+			payload.Host = content
+		}
+	}
+
+	return payload
 }

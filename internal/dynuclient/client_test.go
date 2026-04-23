@@ -2,6 +2,9 @@ package dynuclient_test
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -145,5 +148,57 @@ func TestClientDNSRecordWriteAPIError(t *testing.T) {
 	_, err := client.CreateDNSRecord(context.Background(), 1001, dynuclient.CreateDNSRecordRequest{RecordType: "", Content: "x"})
 	if err == nil || !strings.Contains(err.Error(), "Validation Exception") {
 		t.Fatalf("expected validation API error, got %v", err)
+	}
+}
+
+func TestClientCreateDNSRecordSendsIPv4AddressForARecord(t *testing.T) {
+	var captured map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/dns/1001/record" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
+			t.Fatalf("failed to decode payload: %v", err)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"statusCode": 200,
+			"id":         10,
+			"domainId":   1001,
+			"domainName": "example.com",
+			"nodeName":   "www",
+			"hostname":   "www.example.com",
+			"recordType": "A",
+			"content":    "167.179.167.166",
+			"ttl":        300,
+			"state":      true,
+		})
+	}))
+	defer server.Close()
+
+	client := dynuclient.New("test-key", dynuclient.WithBaseURL(server.URL), dynuclient.WithHTTPClient(server.Client()))
+	_, err := client.CreateDNSRecord(context.Background(), 1001, dynuclient.CreateDNSRecordRequest{
+		NodeName:   "www",
+		RecordType: "A",
+		Content:    "167.179.167.166",
+		TTL:        300,
+	})
+	if err != nil {
+		t.Fatalf("CreateDNSRecord() error = %v", err)
+	}
+
+	if captured["ipv4Address"] != "167.179.167.166" {
+		t.Fatalf("expected ipv4Address in payload, got %#v", captured)
+	}
+}
+
+func TestClientDoRequestTopLevelAPIExceptionPayload(t *testing.T) {
+	fake := fakedynu.NewServer()
+	defer fake.Close()
+	fake.SetRawResponse("/dns", 505, `{"statusCode":505,"type":"Validation Exception","message":"Invalid IP address."}`)
+
+	client := dynuclient.New("test-key", dynuclient.WithBaseURL(fake.BaseURL()), dynuclient.WithHTTPClient(fake.Client()))
+	_, err := client.ListDomains(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "Invalid IP address.") {
+		t.Fatalf("expected top-level API error, got %v", err)
 	}
 }
