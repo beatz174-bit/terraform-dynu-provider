@@ -1,41 +1,20 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
-func hostnameFromConfig(config tfsdk.Config) (types.String, error) {
-	if !config.Raw.IsKnown() {
-		return types.StringUnknown(), nil
-	}
-	if config.Raw.IsNull() {
-		return types.StringNull(), nil
-	}
-
-	attributes := map[string]tftypes.Value{}
-	if err := config.Raw.As(&attributes); err != nil {
-		return types.StringNull(), fmt.Errorf("decode data source config object: %w", err)
+func hostnameFromConfig(ctx context.Context, config tfsdk.Config) (types.String, error) {
+	var hostname types.String
+	diags := config.GetAttribute(ctx, path.Root("hostname"), &hostname)
+	if diags.HasError() {
+		return types.StringNull(), fmt.Errorf("decode hostname from data source config: %s", diags.Errors()[0].Summary())
 	}
 
-	hostnameValue, ok := attributes["hostname"]
-	if !ok {
-		return types.StringNull(), fmt.Errorf("hostname is missing from data source config")
-	}
-	if !hostnameValue.IsKnown() {
-		return types.StringUnknown(), nil
-	}
-	if hostnameValue.IsNull() {
-		return types.StringNull(), nil
-	}
-
-	var hostname string
-	if err := hostnameValue.As(&hostname); err != nil {
-		return types.StringNull(), fmt.Errorf("decode hostname: %w", err)
-	}
-
-	return types.StringValue(hostname), nil
+	return hostname, nil
 }
