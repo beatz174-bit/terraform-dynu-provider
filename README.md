@@ -14,6 +14,11 @@ This provider is **not published** to the Terraform Registry yet. For local deve
 go build -o terraform-provider-dynu
 ```
 
+By default, local builds use embedded metadata values:
+- `version=dev`
+- `commit=none`
+- `built=unknown`
+
 2. Configure `~/.terraformrc`:
 
 ```hcl
@@ -52,6 +57,33 @@ terraform plan
 ```
 
 When provider configuration or code changes, rebuild the provider binary first, then re-run `terraform validate` and `terraform plan`.
+
+### Version metadata in binaries
+
+The provider embeds build metadata (`version`, `commit`, `date`) in the binary.
+
+- Local builds (no `-ldflags`) default to:
+  - `version=dev`
+  - `commit=none`
+  - `built=unknown`
+- You can inspect metadata from the binary with either:
+  - `./terraform-provider-dynu --version`
+  - `./terraform-provider-dynu version`
+
+Build a stamped binary with standard Go `-ldflags`:
+
+```bash
+VERSION=${VERSION:-v0.2.0}
+COMMIT=$(git rev-parse --short HEAD)
+DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+go build -o terraform-provider-dynu \
+  -ldflags="-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}"
+```
+
+Release tag/version mapping:
+- Git tag `v0.1.0` -> build with `VERSION=v0.1.0`
+- Git tag `v0.2.0` -> build with `VERSION=v0.2.0`
 
 ## Copy/paste starter configuration
 

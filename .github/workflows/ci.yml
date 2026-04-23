@@ -18,3 +18,12 @@ jobs:
 
       - name: Verify formatting and run quality gate
         run: ./scripts/check.sh
+
+      - name: Build provider binary (stamped metadata)
+        run: |
+          VERSION="${GITHUB_REF_NAME:-dev}"
+          COMMIT="$(git rev-parse --short HEAD)"
+          DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          go build -o terraform-provider-dynu \
+            -ldflags="-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}"
