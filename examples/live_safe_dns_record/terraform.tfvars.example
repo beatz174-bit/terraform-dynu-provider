@@ -8,7 +8,7 @@ test_prefix = "tfacc"
 test_suffix = "manual"
 
 # Optional: documentation/test IP for disposable A record content.
-test_ip = "198.51.100.10"
+test_ip = "1.1.1.1"
 
 # Optional TTL for disposable A record.
 test_ttl = 300
