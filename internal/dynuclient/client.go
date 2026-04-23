@@ -1,6 +1,7 @@
 package dynuclient
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -106,6 +107,26 @@ type DNSRecord struct {
 	Host       string `json:"host"`
 }
 
+type CreateDNSRecordRequest struct {
+	NodeName   string `json:"nodeName,omitempty"`
+	RecordType string `json:"recordType"`
+	Content    string `json:"content"`
+	TTL        int64  `json:"ttl,omitempty"`
+	State      *bool  `json:"state,omitempty"`
+	Group      string `json:"group,omitempty"`
+	Host       string `json:"host,omitempty"`
+}
+
+type UpdateDNSRecordRequest struct {
+	NodeName   string `json:"nodeName,omitempty"`
+	RecordType string `json:"recordType"`
+	Content    string `json:"content"`
+	TTL        int64  `json:"ttl,omitempty"`
+	State      *bool  `json:"state,omitempty"`
+	Group      string `json:"group,omitempty"`
+	Host       string `json:"host,omitempty"`
+}
+
 type listDomainsResponse struct {
 	apiResponse
 	Domains []Domain `json:"domains"`
@@ -121,6 +142,11 @@ type listDNSRecordsResponse struct {
 	DNSRecords []DNSRecord `json:"dnsRecords"`
 }
 
+type getDNSRecordResponse struct {
+	apiResponse
+	DNSRecord
+}
+
 type getRootResponse struct {
 	apiResponse
 	ID         int64  `json:"id"`
@@ -131,7 +157,7 @@ type getRootResponse struct {
 
 func (c *Client) ListDomains(ctx context.Context) ([]Domain, error) {
 	var resp listDomainsResponse
-	if err := c.doGET(ctx, "/dns", &resp); err != nil {
+	if err := c.doRequest(ctx, http.MethodGet, "/dns", nil, &resp); err != nil {
 		return nil, err
 	}
 	return resp.Domains, nil
@@ -139,7 +165,7 @@ func (c *Client) ListDomains(ctx context.Context) ([]Domain, error) {
 
 func (c *Client) GetDomainByID(ctx context.Context, domainID int64) (*Domain, error) {
 	var resp getDomainResponse
-	if err := c.doGET(ctx, fmt.Sprintf("/dns/%d", domainID), &resp); err != nil {
+	if err := c.doRequest(ctx, http.MethodGet, fmt.Sprintf("/dns/%d", domainID), nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp.Domain, nil
@@ -147,7 +173,7 @@ func (c *Client) GetDomainByID(ctx context.Context, domainID int64) (*Domain, er
 
 func (c *Client) GetRootDomain(ctx context.Context, hostname string) (int64, string, error) {
 	var resp getRootResponse
-	if err := c.doGET(ctx, fmt.Sprintf("/dns/getroot/%s", url.PathEscape(hostname)), &resp); err != nil {
+	if err := c.doRequest(ctx, http.MethodGet, fmt.Sprintf("/dns/getroot/%s", url.PathEscape(hostname)), nil, &resp); err != nil {
 		return 0, "", err
 	}
 
@@ -160,21 +186,62 @@ func (c *Client) GetRootDomain(ctx context.Context, hostname string) (int64, str
 
 func (c *Client) ListDNSRecords(ctx context.Context, domainID int64) ([]DNSRecord, error) {
 	var resp listDNSRecordsResponse
-	if err := c.doGET(ctx, fmt.Sprintf("/dns/%d/record", domainID), &resp); err != nil {
+	if err := c.doRequest(ctx, http.MethodGet, fmt.Sprintf("/dns/%d/record", domainID), nil, &resp); err != nil {
 		return nil, err
 	}
 	return resp.DNSRecords, nil
 }
 
-func (c *Client) doGET(ctx context.Context, path string, target any) error {
+func (c *Client) GetDNSRecord(ctx context.Context, domainID int64, recordID int64) (*DNSRecord, error) {
+	var resp getDNSRecordResponse
+	if err := c.doRequest(ctx, http.MethodGet, fmt.Sprintf("/dns/%d/record/%d", domainID, recordID), nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.DNSRecord, nil
+}
+
+func (c *Client) CreateDNSRecord(ctx context.Context, domainID int64, req CreateDNSRecordRequest) (*DNSRecord, error) {
+	var resp getDNSRecordResponse
+	if err := c.doRequest(ctx, http.MethodPost, fmt.Sprintf("/dns/%d/record", domainID), req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.DNSRecord, nil
+}
+
+func (c *Client) UpdateDNSRecord(ctx context.Context, domainID int64, recordID int64, req UpdateDNSRecordRequest) (*DNSRecord, error) {
+	var resp getDNSRecordResponse
+	if err := c.doRequest(ctx, http.MethodPut, fmt.Sprintf("/dns/%d/record/%d", domainID, recordID), req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.DNSRecord, nil
+}
+
+func (c *Client) DeleteDNSRecord(ctx context.Context, domainID int64, recordID int64) error {
+	return c.doRequest(ctx, http.MethodDelete, fmt.Sprintf("/dns/%d/record/%d", domainID, recordID), nil, nil)
+}
+
+func (c *Client) doRequest(ctx context.Context, method string, path string, requestBody any, target any) error {
 	requestURL := c.baseURL + path
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+
+	var bodyReader io.Reader
+	if requestBody != nil {
+		body, err := json.Marshal(requestBody)
+		if err != nil {
+			return fmt.Errorf("failed to encode dynu API request: %w", err)
+		}
+		bodyReader = bytes.NewBuffer(body)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, requestURL, bodyReader)
 	if err != nil {
 		return err
 	}
 
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("API-Key", c.apiKey)
+	if requestBody != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 
 	res, err := c.httpClient.Do(req)
 	if err != nil {
@@ -195,8 +262,10 @@ func (c *Client) doGET(ctx context.Context, path string, target any) error {
 		return fmt.Errorf("dynu API returned status %d: %s", res.StatusCode, strings.TrimSpace(string(payload)))
 	}
 
-	if err := json.Unmarshal(payload, target); err != nil {
-		return fmt.Errorf("failed to decode dynu API response: %w", err)
+	if len(bytes.TrimSpace(payload)) > 0 && target != nil {
+		if err := json.Unmarshal(payload, target); err != nil {
+			return fmt.Errorf("failed to decode dynu API response: %w", err)
+		}
 	}
 
 	if apiErr != nil {

@@ -43,7 +43,7 @@ func (p *dynuProvider) Metadata(_ context.Context, _ provider.MetadataRequest, r
 
 func (p *dynuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Terraform provider for Dynu DNS read-only data sources.",
+		Description: "Terraform provider for Dynu DNS domains, records, and data sources.",
 		Attributes: map[string]schema.Attribute{
 			"api_key": schema.StringAttribute{
 				Optional:    true,
@@ -78,7 +78,7 @@ func (p *dynuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 
 	providerData := &providerData{client: newDynuClient(apiKey, data.BaseURL)}
 	resp.DataSourceData = providerData
-	resp.ResourceData = nil
+	resp.ResourceData = providerData
 }
 
 func resolveAPIKey(configValue types.String, envValue string) string {
@@ -97,7 +97,9 @@ func (p *dynuProvider) DataSources(_ context.Context) []func() datasource.DataSo
 }
 
 func (p *dynuProvider) Resources(_ context.Context) []func() resource.Resource {
-	return nil
+	return []func() resource.Resource{
+		NewDNSRecordResource,
+	}
 }
 
 func newDynuClient(apiKey string, baseURL types.String) *dynuclient.Client {

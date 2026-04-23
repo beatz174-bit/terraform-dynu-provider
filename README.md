@@ -2,7 +2,7 @@
 
 A standalone Terraform provider for Dynu DNS.
 
-> Status: **read-only milestone**. This provider currently implements provider configuration plus read-only data sources.
+> Status: **early CRUD milestone**. This provider includes read-only data sources plus one writable resource (`dynu_dns_record`) to establish CRUD foundations.
 
 ## Quick start (local dev with `dev_overrides`)
 
@@ -96,7 +96,40 @@ Optional arguments:
 - `base_url` (String)
   - Test/dev override for Dynu API base URL.
 
-No provider resources are implemented yet.
+Provider resources:
+- `dynu_dns_record` (first writable resource)
+
+
+### `dynu_dns_record`
+
+Arguments:
+- `hostname` (String, required)
+- `record_type` (String, required)
+- `content` (String, required)
+- `ttl` (Number, optional)
+- `state` (Bool, optional)
+- `group` (String, optional)
+- `host` (String, optional)
+- `node_name` (String, optional)
+
+Attributes:
+- `id` (String) in `domain_id/record_id` format
+- `domain_id` (Number)
+- `domain_name` (String)
+- `updated_on` (String)
+- plus all configurable arguments
+
+Example:
+
+```hcl
+resource "dynu_dns_record" "txt" {
+  hostname    = "api.example.com"
+  record_type = "TXT"
+  content     = "hello-from-terraform"
+  ttl         = 300
+  state       = true
+}
+```
 
 ## Data source schema reference
 
@@ -162,6 +195,8 @@ data "dynu_dns_records" "selected" {
   - `examples/data-sources/dynu_domains/data-source.tf`
   - `examples/data-sources/dynu_domain/data-source.tf`
   - `examples/data-sources/dynu_dns_records/data-source.tf`
+- Resource snippet:
+  - `examples/resources/dynu_dns_record/resource.tf`
 
 ## Troubleshooting local dev
 
@@ -211,7 +246,8 @@ Implemented:
 - Provider authentication via `api_key` or `DYNU_API_KEY`
 - Optional provider `base_url` override
 - Data sources: `dynu_domains`, `dynu_domain`, `dynu_dns_records`
+- Resource: `dynu_dns_record` (CRUD + import using `domain_id/record_id`)
 
 Not implemented yet:
-- Terraform resources (create/update/delete)
-- Any write API operations
+- Additional Terraform resources beyond `dynu_dns_record`
+- Broader Dynu API coverage outside current DNS/domain scope
