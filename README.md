@@ -40,12 +40,12 @@ terraform validate
 terraform plan
 ```
 
-4. Run the live-safe write example (opt-in, creates a disposable DNS record only):
+4. Run the live-safe read-only example (opt-in, queries an existing hostname):
 
 ```bash
 cd examples/live_safe_dns_record
 cp terraform.tfvars.example terraform.tfvars
-# set only dynu_root_domain to a Dynu-managed root zone you control
+# set hostname to an existing Dynu-managed hostname you control
 terraform validate
 terraform plan
 ```
@@ -293,18 +293,17 @@ Live acceptance tests are opt-in and require:
 - `DYNU_API_KEY`
 - optional `DYNU_DOMAIN` for domain-specific coverage
 
-### Live safe write testing
+### Live-safe read-only testing
 
-Use `examples/live_safe_dns_record` when you want to safely validate writable provider behavior against a real Dynu account.
+Use `examples/live_safe_dns_record` when you want to safely validate live API connectivity without any write operations.
 
-- This example creates a unique temporary subdomain in the form `<prefix>-<random>.<dynu_root_domain>`.
-- It creates exactly one disposable `A` record using an obviously non-production test IP by default.
-- It is designed so `terraform destroy` removes only the created disposable record from that run/state.
+- This example uses only the `dynu_dns_records` data source.
+- It reads DNS records for an existing hostname you provide.
+- It does not create, update, or delete DNS records.
 
 Safety guidance:
-- Set `dynu_root_domain` to a root Dynu-managed zone you control (for example `example.com`).
-- Do **not** supply or target an existing live full hostname you care about.
-- If apply is interrupted, rerun `terraform destroy` from the same directory/state to clean up.
+- Set `hostname` to an existing Dynu-managed hostname you control (for example `www.example.com`).
+- Review output during `terraform plan` to confirm the returned record set.
 
 ## Feature scope
 
