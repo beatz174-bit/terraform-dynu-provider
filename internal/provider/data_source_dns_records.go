@@ -100,9 +100,9 @@ func (d *dnsRecordsDataSource) Configure(_ context.Context, req datasource.Confi
 }
 
 func (d *dnsRecordsDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	var hostname types.String
-	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("hostname"), &hostname)...)
-	if resp.Diagnostics.HasError() {
+	hostname, err := hostnameFromConfig(req.Config)
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to parse data source configuration", err.Error())
 		return
 	}
 
