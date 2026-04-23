@@ -51,7 +51,7 @@ Do not implement in this phase:
 
 ## Developer scripts
 - `scripts/setup-dev.sh`: validate local toolchain requirements
-- `scripts/check.sh`: run formatting and unit checks
+- `scripts/check.sh`: run formatting and unit checks, then run Terraform checks against `examples/`
 - `scripts/testacc.sh`: run acceptance tests using generic env vars
 
 ## Output expectations
