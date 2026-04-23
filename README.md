@@ -70,10 +70,20 @@ The provider embeds build metadata (`version`, `commit`, `date`) in the binary.
   - `./terraform-provider-dynu --version`
   - `./terraform-provider-dynu version`
 
-Build a stamped binary with standard Go `-ldflags`:
+Primary build method (recommended):
 
 ```bash
-VERSION=${VERSION:-v0.2.0}
+./build.sh v0.2.0
+```
+
+`build.sh` takes exactly one argument (the version string), then derives commit and date automatically:
+- `COMMIT=$(git rev-parse --short HEAD)`
+- `DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)`
+
+Manual equivalent (same stamped build command used by `build.sh`):
+
+```bash
+VERSION=v0.2.0
 COMMIT=$(git rev-parse --short HEAD)
 DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
