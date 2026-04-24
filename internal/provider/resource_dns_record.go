@@ -19,9 +19,10 @@ import (
 )
 
 var (
-	_ resource.Resource                = &dnsRecordResource{}
-	_ resource.ResourceWithConfigure   = &dnsRecordResource{}
-	_ resource.ResourceWithImportState = &dnsRecordResource{}
+	_ resource.Resource                   = &dnsRecordResource{}
+	_ resource.ResourceWithConfigure      = &dnsRecordResource{}
+	_ resource.ResourceWithImportState    = &dnsRecordResource{}
+	_ resource.ResourceWithValidateConfig = &dnsRecordResource{}
 )
 
 type dnsRecordResource struct {
@@ -65,7 +66,7 @@ func (r *dnsRecordResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				},
 			},
 			"record_type": schema.StringAttribute{Required: true, Description: "DNS record type (A, AAAA, CNAME, TXT, etc.).", Validators: []validator.String{stringvalidator.LengthAtLeast(1)}},
-			"content":     schema.StringAttribute{Optional: true, Computed: true, Description: "Record content/value."},
+			"content":     schema.StringAttribute{Optional: true, Description: "Record content/value."},
 			"ttl": schema.Int64Attribute{
 				Optional:    true,
 				Computed:    true,
@@ -93,6 +94,31 @@ func (r *dnsRecordResource) Configure(_ context.Context, req resource.ConfigureR
 		return
 	}
 	r.clientProvider = providerData
+}
+
+func (r *dnsRecordResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var config dnsRecordResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	recordType, skip := knownNormalizedString(config.RecordType)
+	if skip {
+		return
+	}
+	if recordType == "A" || recordType == "AAAA" {
+		return
+	}
+	if config.Content.IsUnknown() {
+		return
+	}
+	if config.Content.IsNull() || strings.TrimSpace(config.Content.ValueString()) == "" {
+		resp.Diagnostics.AddError(
+			"Missing required content for DNS record type",
+			fmt.Sprintf("The %q record type requires a non-empty content value. Set the content attribute or use A/AAAA when content should be omitted.", recordType),
+		)
+	}
 }
 
 func (r *dnsRecordResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -128,6 +154,9 @@ func (r *dnsRecordResource) Create(ctx context.Context, req resource.CreateReque
 	}
 
 	state := mapDNSRecordToState(*record)
+	if plan.Content.IsNull() || plan.Content.IsUnknown() {
+		state.Content = types.StringNull()
+	}
 	state.ID = types.StringValue(formatDNSRecordID(record.DomainID, record.ID))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -157,6 +186,9 @@ func (r *dnsRecordResource) Read(ctx context.Context, req resource.ReadRequest, 
 	}
 
 	nextState := mapDNSRecordToState(*record)
+	if state.Content.IsNull() {
+		nextState.Content = types.StringNull()
+	}
 	nextState.ID = state.ID
 	resp.Diagnostics.Append(resp.State.Set(ctx, &nextState)...)
 }
@@ -209,6 +241,9 @@ func (r *dnsRecordResource) Update(ctx context.Context, req resource.UpdateReque
 	}
 
 	nextState := mapDNSRecordToState(*record)
+	if plan.Content.IsNull() || plan.Content.IsUnknown() {
+		nextState.Content = types.StringNull()
+	}
 	nextState.ID = types.StringValue(formatDNSRecordID(record.DomainID, record.ID))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &nextState)...)
 }
@@ -359,4 +394,11 @@ func addDNSRecordWriteDiagnostic(operation string, recordType string, content *s
 	}
 
 	diagnostics.AddError(diagnosticSummary(fmt.Sprintf("Unable to %s Dynu DNS record", operation), err), detail)
+}
+
+func knownNormalizedString(value types.String) (string, bool) {
+	if value.IsNull() || value.IsUnknown() {
+		return "", true
+	}
+	return strings.ToUpper(strings.TrimSpace(value.ValueString())), false
 }
