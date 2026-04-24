@@ -2,8 +2,13 @@ package provider
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"math/rand"
 	"os"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/dynu/terraform-provider-dynu/internal/dynuclient"
 )
@@ -73,5 +78,142 @@ func TestAccDataSourceDNSRecords(t *testing.T) {
 	}
 	if records == nil {
 		t.Fatal("expected records slice, got nil")
+	}
+}
+
+func TestAccDNSRecordAWithEmptyContent(t *testing.T) {
+	testAccPreCheck(t)
+	hostname := testAccDomainFromEnv(t)
+	domainID, _, client := testAccDomainClient(t, hostname)
+
+	nodeName := testAccDisposableNodeName("acc-empty-a")
+	record := testAccCreateRecordMaybeSkipUnsupported(
+		t,
+		client,
+		domainID,
+		dynuclient.CreateDNSRecordRequest{
+			NodeName:   nodeName,
+			RecordType: "A",
+		},
+		"A record with empty content",
+	)
+	defer testAccDeleteRecord(t, client, domainID, record.ID)
+
+	got := testAccFetchRecordFromList(t, client, domainID, record.ID)
+	if strings.TrimSpace(got.Content) != "" {
+		t.Fatalf("expected Dynu to return empty content for A record, got %q", got.Content)
+	}
+}
+
+func TestAccDNSRecordAAAAWithEmptyContent(t *testing.T) {
+	testAccPreCheck(t)
+	hostname := testAccDomainFromEnv(t)
+	domainID, _, client := testAccDomainClient(t, hostname)
+
+	nodeName := testAccDisposableNodeName("acc-empty-aaaa")
+	record := testAccCreateRecordMaybeSkipUnsupported(
+		t,
+		client,
+		domainID,
+		dynuclient.CreateDNSRecordRequest{
+			NodeName:   nodeName,
+			RecordType: "AAAA",
+		},
+		"AAAA record with empty content",
+	)
+	defer testAccDeleteRecord(t, client, domainID, record.ID)
+
+	got := testAccFetchRecordFromList(t, client, domainID, record.ID)
+	if strings.TrimSpace(got.Content) != "" {
+		t.Fatalf("expected Dynu to return empty content for AAAA record, got %q", got.Content)
+	}
+}
+
+func TestAccDNSRecordCNAMELifecycle(t *testing.T) {
+	testAccPreCheck(t)
+	hostname := testAccDomainFromEnv(t)
+	domainID, _, client := testAccDomainClient(t, hostname)
+
+	nodeName := testAccDisposableNodeName("acc-cname")
+
+	created, err := client.CreateDNSRecord(context.Background(), domainID, dynuclient.CreateDNSRecordRequest{
+		NodeName:   nodeName,
+		RecordType: "CNAME",
+		Content:    "target1.example.com",
+		TTL:        120,
+	})
+	if err != nil {
+		t.Fatalf("CreateDNSRecord() failed for CNAME create: %v", err)
+	}
+	defer testAccDeleteRecord(t, client, domainID, created.ID)
+
+	updated, err := client.UpdateDNSRecord(context.Background(), domainID, created.ID, dynuclient.UpdateDNSRecordRequest{
+		NodeName:   nodeName,
+		RecordType: "CNAME",
+		Content:    "target2.example.com",
+		TTL:        300,
+	})
+	if err != nil {
+		t.Fatalf("UpdateDNSRecord() failed for CNAME update: %v", err)
+	}
+	if got := strings.TrimSuffix(strings.ToLower(updated.Content), "."); got != "target2.example.com" {
+		t.Fatalf("unexpected updated content from create/update response: %q", updated.Content)
+	}
+
+	read := testAccFetchRecordFromList(t, client, domainID, created.ID)
+	if got := strings.TrimSuffix(strings.ToLower(read.Content), "."); got != "target2.example.com" {
+		t.Fatalf("expected ListDNSRecords() read-back to reflect updated CNAME target, got %q", read.Content)
+	}
+}
+
+func testAccDomainClient(t *testing.T, hostname string) (int64, string, *dynuclient.Client) {
+	t.Helper()
+	client := dynuclient.New(os.Getenv("DYNU_API_KEY"))
+	domainID, domainName, err := client.GetRootDomain(context.Background(), hostname)
+	if err != nil {
+		t.Fatalf("GetRootDomain() failed: %v", err)
+	}
+	return domainID, domainName, client
+}
+
+func testAccDisposableNodeName(prefix string) string {
+	return fmt.Sprintf("%s-%d-%04d", prefix, time.Now().UnixNano(), rand.Intn(10000))
+}
+
+func testAccCreateRecordMaybeSkipUnsupported(t *testing.T, client *dynuclient.Client, domainID int64, req dynuclient.CreateDNSRecordRequest, scenario string) *dynuclient.DNSRecord {
+	t.Helper()
+	record, err := client.CreateDNSRecord(context.Background(), domainID, req)
+	if err == nil {
+		return record
+	}
+
+	var apiErr *dynuclient.APIError
+	if errors.As(err, &apiErr) && apiErr.StatusCode >= 400 && apiErr.StatusCode < 500 {
+		t.Skipf("Dynu account/API does not support %s in this environment (%v)", scenario, err)
+	}
+
+	t.Fatalf("CreateDNSRecord() failed for %s: %v", scenario, err)
+	return nil
+}
+
+func testAccFetchRecordFromList(t *testing.T, client *dynuclient.Client, domainID int64, recordID int64) dynuclient.DNSRecord {
+	t.Helper()
+	records, err := client.ListDNSRecords(context.Background(), domainID)
+	if err != nil {
+		t.Fatalf("ListDNSRecords() failed: %v", err)
+	}
+	for _, record := range records {
+		if record.ID == recordID {
+			return record
+		}
+	}
+	t.Fatalf("record id %d not found in ListDNSRecords() response", recordID)
+	return dynuclient.DNSRecord{}
+}
+
+func testAccDeleteRecord(t *testing.T, client *dynuclient.Client, domainID int64, recordID int64) {
+	t.Helper()
+	if err := client.DeleteDNSRecord(context.Background(), domainID, recordID); err != nil {
+		t.Fatalf("DeleteDNSRecord() cleanup failed: %v", err)
 	}
 }
