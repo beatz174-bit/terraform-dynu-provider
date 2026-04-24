@@ -9,6 +9,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -64,7 +65,7 @@ func (r *dnsRecordResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				},
 			},
 			"record_type": schema.StringAttribute{Required: true, Description: "DNS record type (A, AAAA, CNAME, TXT, etc.).", Validators: []validator.String{stringvalidator.LengthAtLeast(1)}},
-			"content":     schema.StringAttribute{Required: true, Description: "Record content/value."},
+			"content":     schema.StringAttribute{Optional: true, Computed: true, Description: "Record content/value."},
 			"ttl": schema.Int64Attribute{
 				Optional:    true,
 				Computed:    true,
@@ -110,16 +111,19 @@ func (r *dnsRecordResource) Create(ctx context.Context, req resource.CreateReque
 	createReq := dynuclient.CreateDNSRecordRequest{
 		NodeName:   recordNodeName(plan.NodeName, plan.Hostname, domainName),
 		RecordType: strings.TrimSpace(plan.RecordType.ValueString()),
-		Content:    strings.TrimSpace(plan.Content.ValueString()),
+		Content:    stringPointerFromOptional(plan.Content),
 		TTL:        int64FromOptional(plan.TTL),
 		State:      boolPointerFromOptional(plan.State),
 		Group:      stringFromOptional(plan.Group),
 		Host:       stringFromOptional(plan.Host),
 	}
+	if !validateDNSRecordContentForType(createReq.RecordType, createReq.Content, &resp.Diagnostics) {
+		return
+	}
 
 	record, err := r.clientProvider.client.CreateDNSRecord(ctx, domainID, createReq)
 	if err != nil {
-		resp.Diagnostics.AddError(diagnosticSummary("Unable to create Dynu DNS record", err), err.Error())
+		addDNSRecordWriteDiagnostic("create", createReq.RecordType, createReq.Content, err, &resp.Diagnostics)
 		return
 	}
 
@@ -183,15 +187,18 @@ func (r *dnsRecordResource) Update(ctx context.Context, req resource.UpdateReque
 	updateReq := dynuclient.UpdateDNSRecordRequest{
 		NodeName:   recordNodeName(plan.NodeName, plan.Hostname, domainName),
 		RecordType: strings.TrimSpace(plan.RecordType.ValueString()),
-		Content:    strings.TrimSpace(plan.Content.ValueString()),
+		Content:    stringPointerFromOptional(plan.Content),
 		TTL:        int64FromOptional(plan.TTL),
 		State:      boolPointerFromOptional(plan.State),
 		Group:      stringFromOptional(plan.Group),
 		Host:       stringFromOptional(plan.Host),
 	}
+	if !validateDNSRecordContentForType(updateReq.RecordType, updateReq.Content, &resp.Diagnostics) {
+		return
+	}
 
 	if _, err := r.clientProvider.client.UpdateDNSRecord(ctx, domainID, recordID, updateReq); err != nil {
-		resp.Diagnostics.AddError(diagnosticSummary("Unable to update Dynu DNS record", err), err.Error())
+		addDNSRecordWriteDiagnostic("update", updateReq.RecordType, updateReq.Content, err, &resp.Diagnostics)
 		return
 	}
 
@@ -313,4 +320,43 @@ func stringFromOptional(value types.String) string {
 		return ""
 	}
 	return strings.TrimSpace(value.ValueString())
+}
+
+func stringPointerFromOptional(value types.String) *string {
+	if value.IsNull() || value.IsUnknown() {
+		return nil
+	}
+	trimmed := strings.TrimSpace(value.ValueString())
+	return &trimmed
+}
+
+func validateDNSRecordContentForType(recordType string, content *string, diagnostics *diag.Diagnostics) bool {
+	normalizedType := strings.ToUpper(strings.TrimSpace(recordType))
+	if normalizedType == "A" || normalizedType == "AAAA" {
+		return true
+	}
+
+	if content == nil || strings.TrimSpace(*content) == "" {
+		diagnostics.AddError(
+			"Missing required content for DNS record type",
+			fmt.Sprintf("The %q record type requires a non-empty content value. Set the content attribute or choose a type that supports omitted content (A/AAAA).", normalizedType),
+		)
+		return false
+	}
+
+	return true
+}
+
+func addDNSRecordWriteDiagnostic(operation string, recordType string, content *string, err error, diagnostics *diag.Diagnostics) {
+	detail := err.Error()
+	var apiErr *dynuclient.APIError
+	if errors.As(err, &apiErr) {
+		presence := "omitted"
+		if content != nil {
+			presence = fmt.Sprintf("set to %q", *content)
+		}
+		detail = fmt.Sprintf("%s. Dynu rejected this %s request for record type %q where content was %s.", err.Error(), operation, strings.ToUpper(strings.TrimSpace(recordType)), presence)
+	}
+
+	diagnostics.AddError(diagnosticSummary(fmt.Sprintf("Unable to %s Dynu DNS record", operation), err), detail)
 }

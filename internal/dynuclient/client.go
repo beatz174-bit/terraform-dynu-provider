@@ -109,23 +109,23 @@ type DNSRecord struct {
 }
 
 type CreateDNSRecordRequest struct {
-	NodeName   string `json:"nodeName,omitempty"`
-	RecordType string `json:"recordType"`
-	Content    string `json:"content"`
-	TTL        int64  `json:"ttl,omitempty"`
-	State      *bool  `json:"state,omitempty"`
-	Group      string `json:"group,omitempty"`
-	Host       string `json:"host,omitempty"`
+	NodeName   string  `json:"nodeName,omitempty"`
+	RecordType string  `json:"recordType"`
+	Content    *string `json:"content,omitempty"`
+	TTL        int64   `json:"ttl,omitempty"`
+	State      *bool   `json:"state,omitempty"`
+	Group      string  `json:"group,omitempty"`
+	Host       string  `json:"host,omitempty"`
 }
 
 type UpdateDNSRecordRequest struct {
-	NodeName   string `json:"nodeName,omitempty"`
-	RecordType string `json:"recordType"`
-	Content    string `json:"content"`
-	TTL        int64  `json:"ttl,omitempty"`
-	State      *bool  `json:"state,omitempty"`
-	Group      string `json:"group,omitempty"`
-	Host       string `json:"host,omitempty"`
+	NodeName   string  `json:"nodeName,omitempty"`
+	RecordType string  `json:"recordType"`
+	Content    *string `json:"content,omitempty"`
+	TTL        int64   `json:"ttl,omitempty"`
+	State      *bool   `json:"state,omitempty"`
+	Group      string  `json:"group,omitempty"`
+	Host       string  `json:"host,omitempty"`
 }
 
 type listDomainsResponse struct {
@@ -310,18 +310,18 @@ func parseAPIException(payload []byte) error {
 }
 
 type dnsRecordUpsertPayload struct {
-	NodeName    string `json:"nodeName,omitempty"`
-	RecordType  string `json:"recordType"`
-	Content     string `json:"content,omitempty"`
-	IPv4Address string `json:"ipv4Address,omitempty"`
-	IPv6Address string `json:"ipv6Address,omitempty"`
-	TTL         int64  `json:"ttl,omitempty"`
-	State       *bool  `json:"state,omitempty"`
-	Group       string `json:"group,omitempty"`
-	Host        string `json:"host,omitempty"`
+	NodeName    string  `json:"nodeName,omitempty"`
+	RecordType  string  `json:"recordType"`
+	Content     *string `json:"content,omitempty"`
+	IPv4Address string  `json:"ipv4Address,omitempty"`
+	IPv6Address string  `json:"ipv6Address,omitempty"`
+	TTL         int64   `json:"ttl,omitempty"`
+	State       *bool   `json:"state,omitempty"`
+	Group       string  `json:"group,omitempty"`
+	Host        string  `json:"host,omitempty"`
 }
 
-func buildDNSRecordUpsertPayload(recordType string, nodeName string, content string, ttl int64, state *bool, group string, host string) dnsRecordUpsertPayload {
+func buildDNSRecordUpsertPayload(recordType string, nodeName string, content *string, ttl int64, state *bool, group string, host string) dnsRecordUpsertPayload {
 	payload := dnsRecordUpsertPayload{
 		NodeName:   nodeName,
 		RecordType: recordType,
@@ -334,12 +334,16 @@ func buildDNSRecordUpsertPayload(recordType string, nodeName string, content str
 
 	switch strings.ToUpper(strings.TrimSpace(recordType)) {
 	case "A":
-		payload.IPv4Address = content
+		if content != nil {
+			payload.IPv4Address = *content
+		}
 	case "AAAA":
-		payload.IPv6Address = content
+		if content != nil {
+			payload.IPv6Address = *content
+		}
 	case "CNAME":
-		if payload.Host == "" {
-			payload.Host = content
+		if payload.Host == "" && content != nil {
+			payload.Host = *content
 		}
 	}
 

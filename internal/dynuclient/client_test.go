@@ -95,7 +95,7 @@ func TestClientDNSRecordCRUD(t *testing.T) {
 	created, err := client.CreateDNSRecord(context.Background(), 1001, dynuclient.CreateDNSRecordRequest{
 		NodeName:   "api",
 		RecordType: "TXT",
-		Content:    "created",
+		Content:    stringPointer("created"),
 		TTL:        120,
 		State:      &state,
 		Group:      "integration",
@@ -118,7 +118,7 @@ func TestClientDNSRecordCRUD(t *testing.T) {
 	updated, err := client.UpdateDNSRecord(context.Background(), 1001, created.ID, dynuclient.UpdateDNSRecordRequest{
 		NodeName:   "api",
 		RecordType: "TXT",
-		Content:    "updated",
+		Content:    stringPointer("updated"),
 		TTL:        180,
 		State:      &state,
 	})
@@ -145,7 +145,7 @@ func TestClientDNSRecordWriteAPIError(t *testing.T) {
 	fake.SetAPIError("/dns/1001/record", fakedynu.APIError{HTTPStatus: 400, StatusCode: 400, Type: "Validation Exception", Message: "recordType invalid"})
 
 	client := dynuclient.New("test-key", dynuclient.WithBaseURL(fake.BaseURL()), dynuclient.WithHTTPClient(fake.Client()))
-	_, err := client.CreateDNSRecord(context.Background(), 1001, dynuclient.CreateDNSRecordRequest{RecordType: "", Content: "x"})
+	_, err := client.CreateDNSRecord(context.Background(), 1001, dynuclient.CreateDNSRecordRequest{RecordType: "", Content: stringPointer("x")})
 	if err == nil || !strings.Contains(err.Error(), "Validation Exception") {
 		t.Fatalf("expected validation API error, got %v", err)
 	}
@@ -179,7 +179,7 @@ func TestClientCreateDNSRecordSendsIPv4AddressForARecord(t *testing.T) {
 	_, err := client.CreateDNSRecord(context.Background(), 1001, dynuclient.CreateDNSRecordRequest{
 		NodeName:   "www",
 		RecordType: "A",
-		Content:    "167.179.167.166",
+		Content:    stringPointer("167.179.167.166"),
 		TTL:        300,
 	})
 	if err != nil {
@@ -216,7 +216,7 @@ func TestClientCreateDNSRecordNormalizesZoneStyleContent(t *testing.T) {
 	record, err := client.CreateDNSRecord(context.Background(), 1001, dynuclient.CreateDNSRecordRequest{
 		NodeName:   "www",
 		RecordType: "A",
-		Content:    "167.179.167.166",
+		Content:    stringPointer("167.179.167.166"),
 		TTL:        300,
 	})
 	if err != nil {
@@ -238,4 +238,49 @@ func TestClientDoRequestTopLevelAPIExceptionPayload(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "Invalid IP address.") {
 		t.Fatalf("expected top-level API error, got %v", err)
 	}
+}
+
+func TestClientCreateDNSRecordOmitsContentWhenUnset(t *testing.T) {
+	var captured map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/dns/1001/record" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
+			t.Fatalf("failed to decode payload: %v", err)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"statusCode": 200,
+			"id":         10,
+			"domainId":   1001,
+			"domainName": "example.com",
+			"nodeName":   "www",
+			"hostname":   "www.example.com",
+			"recordType": "A",
+			"ttl":        300,
+			"state":      true,
+		})
+	}))
+	defer server.Close()
+
+	client := dynuclient.New("test-key", dynuclient.WithBaseURL(server.URL), dynuclient.WithHTTPClient(server.Client()))
+	_, err := client.CreateDNSRecord(context.Background(), 1001, dynuclient.CreateDNSRecordRequest{
+		NodeName:   "www",
+		RecordType: "A",
+		TTL:        300,
+	})
+	if err != nil {
+		t.Fatalf("CreateDNSRecord() error = %v", err)
+	}
+
+	if _, ok := captured["content"]; ok {
+		t.Fatalf("expected content to be omitted, got %#v", captured["content"])
+	}
+	if _, ok := captured["ipv4Address"]; ok {
+		t.Fatalf("expected ipv4Address to be omitted, got %#v", captured["ipv4Address"])
+	}
+}
+
+func stringPointer(value string) *string {
+	return &value
 }
