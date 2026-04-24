@@ -29,7 +29,7 @@ variable "test_suffix" {
 variable "test_ipv4" {
   description = "IPv4 value for the disposable A record scenario."
   type        = string
-  default     = "192.0.2.123"
+  default     = "1.1.1.1"
 
   validation {
     condition     = trimspace(var.test_ipv4) != ""

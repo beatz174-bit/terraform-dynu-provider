@@ -9,7 +9,7 @@ dynu_root_domain = "example.com"
 test_suffix = "manual"
 
 # Safe documentation values for live test scenarios.
-test_ipv4         = "192.0.2.123"
+test_ipv4         = "1.1.1.1"
 test_ipv6         = "2001:db8::123"
 test_cname_target = "example.com"
 
