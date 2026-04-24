@@ -1,14 +1,16 @@
-# Required: use only a Dynu-managed root domain/zone that you control.
-# Do NOT put an existing full production hostname here.
+# Optional if DYNU_API_KEY is exported in your shell.
+# dynu_api_key = "REPLACE_ME"
+
+# Required: a Dynu-managed root domain/zone that you control.
+# Do NOT put an existing production hostname here.
 dynu_root_domain = "example.com"
 
-# Optional naming for disposable hostname labels.
-# Final hostname format: <test_prefix>-<test_suffix>.<dynu_root_domain>
-test_prefix = "tfacc"
+# Set to a unique value per run so records are clearly disposable.
 test_suffix = "manual"
 
-# Optional: documentation/test IP for disposable A record content.
-test_ip = "1.1.1.1"
+# Safe documentation values for live test scenarios.
+test_ipv4         = "192.0.2.123"
+test_ipv6         = "2001:db8::123"
+test_cname_target = "example.com"
 
-# Optional TTL for disposable A record.
 test_ttl = 300
