@@ -188,7 +188,7 @@ func testAccCreateRecordMaybeSkipUnsupported(t *testing.T, client *dynuclient.Cl
 	}
 
 	var apiErr *dynuclient.APIError
-	if errors.As(err, &apiErr) && apiErr.StatusCode >= 400 && apiErr.StatusCode < 500 {
+	if errors.As(err, &apiErr) && isUnsupportedEmptyContentAPIError(apiErr) {
 		t.Skipf("Dynu account/API does not support %s in this environment (%v)", scenario, err)
 	}
 
@@ -215,5 +215,87 @@ func testAccDeleteRecord(t *testing.T, client *dynuclient.Client, domainID int64
 	t.Helper()
 	if err := client.DeleteDNSRecord(context.Background(), domainID, recordID); err != nil {
 		t.Fatalf("DeleteDNSRecord() cleanup failed: %v", err)
+	}
+}
+
+func isUnsupportedEmptyContentAPIError(apiErr *dynuclient.APIError) bool {
+	if apiErr == nil || apiErr.StatusCode != 400 {
+		return false
+	}
+
+	normalizedType := strings.ToLower(strings.TrimSpace(apiErr.Type))
+	if normalizedType != "validation exception" {
+		return false
+	}
+
+	normalizedMessage := strings.ToLower(strings.TrimSpace(apiErr.Message))
+	knownUnsupportedMessages := []string{
+		"content is required",
+		"ipv4address is required",
+		"ipv6address is required",
+	}
+	for _, fragment := range knownUnsupportedMessages {
+		if strings.Contains(normalizedMessage, fragment) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func TestIsUnsupportedEmptyContentAPIError(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name   string
+		err    *dynuclient.APIError
+		expect bool
+	}{
+		{
+			name: "validation message with required content",
+			err: &dynuclient.APIError{
+				StatusCode: 400,
+				Type:       "Validation Exception",
+				Message:    "Content is required.",
+			},
+			expect: true,
+		},
+		{
+			name: "validation message with ipv4 required",
+			err: &dynuclient.APIError{
+				StatusCode: 400,
+				Type:       "Validation Exception",
+				Message:    "IPv4Address is required for A records.",
+			},
+			expect: true,
+		},
+		{
+			name: "different validation error should fail",
+			err: &dynuclient.APIError{
+				StatusCode: 400,
+				Type:       "Validation Exception",
+				Message:    "recordType is invalid",
+			},
+			expect: false,
+		},
+		{
+			name: "transient throttling should fail",
+			err: &dynuclient.APIError{
+				StatusCode: 429,
+				Type:       "Too Many Requests",
+				Message:    "rate limit exceeded",
+			},
+			expect: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := isUnsupportedEmptyContentAPIError(tc.err); got != tc.expect {
+				t.Fatalf("unexpected result for %q: got %v, want %v", tc.name, got, tc.expect)
+			}
+		})
 	}
 }
