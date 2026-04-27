@@ -13,6 +13,10 @@ import (
 	"github.com/dynu/terraform-provider-dynu/internal/dynuclient"
 )
 
+func stringPtr(s string) *string {
+	return &s
+}
+
 func testAccPreCheck(t *testing.T) {
 	t.Helper()
 	if os.Getenv("TF_ACC") != "1" {
@@ -139,7 +143,7 @@ func TestAccDNSRecordCNAMELifecycle(t *testing.T) {
 	created, err := client.CreateDNSRecord(context.Background(), domainID, dynuclient.CreateDNSRecordRequest{
 		NodeName:   nodeName,
 		RecordType: "CNAME",
-		Content:    "target1.example.com",
+		Content:    stringPtr("target1.example.com"),
 		TTL:        120,
 	})
 	if err != nil {
@@ -150,7 +154,7 @@ func TestAccDNSRecordCNAMELifecycle(t *testing.T) {
 	updated, err := client.UpdateDNSRecord(context.Background(), domainID, created.ID, dynuclient.UpdateDNSRecordRequest{
 		NodeName:   nodeName,
 		RecordType: "CNAME",
-		Content:    "target2.example.com",
+		Content:    stringPtr("target2.example.com"),
 		TTL:        300,
 	})
 	if err != nil {
