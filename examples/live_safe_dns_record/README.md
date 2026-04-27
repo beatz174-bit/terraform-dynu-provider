@@ -32,7 +32,7 @@ Edit `terraform.tfvars` and set at least:
 - `dynu_root_domain`
 - `test_suffix` (use a unique value per run)
 
-Optional overrides include `test_ipv4`, `test_ipv6`, and `test_cname_target`.
+Optional overrides include `test_ipv4`, `test_ipv6`, and `test_cname_target`. The default `test_ipv4` is a routable address (`1.1.1.1`) so the default A-record scenario remains runnable.
 
 ## Run
 

@@ -9,6 +9,8 @@ dynu_root_domain = "example.com"
 test_suffix = "manual"
 
 # Safe documentation values for live test scenarios.
+# `test_ipv4` intentionally defaults to routable public IPv4 so the
+# default A-record apply path succeeds without manual overrides.
 test_ipv4         = "1.1.1.1"
 test_ipv6         = "2001:db8::123"
 test_cname_target = "example.com"

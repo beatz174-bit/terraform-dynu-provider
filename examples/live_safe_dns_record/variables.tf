@@ -27,7 +27,7 @@ variable "test_suffix" {
 }
 
 variable "test_ipv4" {
-  description = "IPv4 value for the disposable A record scenario."
+  description = "IPv4 value for the disposable A record scenario. Defaults to routable public IPv4 so apply works without overrides."
   type        = string
   default     = "1.1.1.1"
 
