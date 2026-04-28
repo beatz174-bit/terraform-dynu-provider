@@ -142,6 +142,83 @@ func TestIntegrationResourceDNSRecordImportStateInvalidID(t *testing.T) {
 	}
 }
 
+func TestIntegrationResourceDNSRecordDynamicAStateStableAndTransitionToStatic(t *testing.T) {
+	ctx := context.Background()
+	fake := fakedynu.NewServer()
+	defer fake.Close()
+
+	r := NewDNSRecordResource().(*dnsRecordResource)
+	configureResource(t, r, fake.BaseURL())
+
+	var schemaResp resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &schemaResp)
+
+	createPlan := dnsRecordResourceModel{
+		Hostname:   types.StringValue("api.a.example.com"),
+		RecordType: types.StringValue("A"),
+		Content:    types.StringNull(),
+		TTL:        types.Int64Value(60),
+		State:      types.BoolValue(true),
+	}
+	plan := tfsdk.Plan{Schema: schemaResp.Schema}
+	if diags := plan.Set(ctx, &createPlan); diags.HasError() {
+		t.Fatalf("set plan diagnostics: %v", diags)
+	}
+
+	createResp := resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	r.Create(ctx, resource.CreateRequest{Plan: plan}, &createResp)
+	if createResp.Diagnostics.HasError() {
+		t.Fatalf("create diagnostics: %v", createResp.Diagnostics)
+	}
+
+	var state dnsRecordResourceModel
+	if diags := createResp.State.Get(ctx, &state); diags.HasError() {
+		t.Fatalf("state get diagnostics: %v", diags)
+	}
+	if !state.Dynamic.ValueBool() {
+		t.Fatalf("expected dynamic=true for blank A, got %#v", state.Dynamic)
+	}
+	if !state.Content.IsNull() {
+		t.Fatalf("expected dynamic A content to remain null in state, got %q", state.Content.ValueString())
+	}
+
+	readResp := resource.ReadResponse{State: createResp.State}
+	r.Read(ctx, resource.ReadRequest{State: createResp.State}, &readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %v", readResp.Diagnostics)
+	}
+	if diags := readResp.State.Get(ctx, &state); diags.HasError() {
+		t.Fatalf("read state diagnostics: %v", diags)
+	}
+	if !state.Content.IsNull() {
+		t.Fatalf("expected dynamic A read to preserve null content, got %q", state.Content.ValueString())
+	}
+
+	updatePlan := state
+	updatePlan.Content = types.StringValue("192.0.2.42")
+	updatePlan.Dynamic = types.BoolValue(false)
+
+	plan = tfsdk.Plan{Schema: schemaResp.Schema}
+	if diags := plan.Set(ctx, &updatePlan); diags.HasError() {
+		t.Fatalf("set update plan diagnostics: %v", diags)
+	}
+
+	updateResp := resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	r.Update(ctx, resource.UpdateRequest{Plan: plan}, &updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %v", updateResp.Diagnostics)
+	}
+	if diags := updateResp.State.Get(ctx, &state); diags.HasError() {
+		t.Fatalf("updated state diagnostics: %v", diags)
+	}
+	if state.Dynamic.ValueBool() {
+		t.Fatalf("expected static A after setting content")
+	}
+	if state.Content.ValueString() != "192.0.2.42" {
+		t.Fatalf("expected static content after update, got %q", state.Content.ValueString())
+	}
+}
+
 func configureResource(t *testing.T, r resource.ResourceWithConfigure, baseURL string) {
 	t.Helper()
 	resp := resource.ConfigureResponse{}

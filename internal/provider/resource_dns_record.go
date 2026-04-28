@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/netip"
 	"strconv"
 	"strings"
 
@@ -34,6 +35,7 @@ type dnsRecordResourceModel struct {
 	Hostname   types.String `tfsdk:"hostname"`
 	RecordType types.String `tfsdk:"record_type"`
 	Content    types.String `tfsdk:"content"`
+	Dynamic    types.Bool   `tfsdk:"dynamic"`
 	TTL        types.Int64  `tfsdk:"ttl"`
 	State      types.Bool   `tfsdk:"state"`
 	Group      types.String `tfsdk:"group"`
@@ -66,7 +68,8 @@ func (r *dnsRecordResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				},
 			},
 			"record_type": schema.StringAttribute{Required: true, Description: "DNS record type (A, AAAA, CNAME, TXT, etc.).", Validators: []validator.String{stringvalidator.LengthAtLeast(1)}},
-			"content":     schema.StringAttribute{Optional: true, Description: "Record content/value."},
+			"content":     schema.StringAttribute{Optional: true, Computed: true, Description: "Record content/value for static records. Omit for A/AAAA dynamic intent."},
+			"dynamic":     schema.BoolAttribute{Optional: true, Computed: true, Description: "Whether A/AAAA should use Dynu dynamic IP semantics. Defaults to true when content is omitted for A/AAAA."},
 			"ttl": schema.Int64Attribute{
 				Optional:    true,
 				Computed:    true,
@@ -107,18 +110,12 @@ func (r *dnsRecordResource) ValidateConfig(ctx context.Context, req resource.Val
 	if skip {
 		return
 	}
-	if recordType == "A" || recordType == "AAAA" {
+	content := stringPointerFromOptionalContent(config.Content)
+	dynamicIntent, ok := resolveDynamicIntent(recordType, config.Content, config.Dynamic, &resp.Diagnostics)
+	if !ok {
 		return
 	}
-	if config.Content.IsUnknown() {
-		return
-	}
-	if config.Content.IsNull() || strings.TrimSpace(config.Content.ValueString()) == "" {
-		resp.Diagnostics.AddError(
-			"Missing required content for DNS record type",
-			fmt.Sprintf("The %q record type requires a non-empty content value. Set the content attribute or use A/AAAA when content should be omitted.", recordType),
-		)
-	}
+	validateDNSRecordContentForType(recordType, content, dynamicIntent, &resp.Diagnostics)
 }
 
 func (r *dnsRecordResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -134,29 +131,37 @@ func (r *dnsRecordResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
+	recordType := strings.TrimSpace(plan.RecordType.ValueString())
+	dynamicIntent, ok := resolveDynamicIntent(strings.ToUpper(recordType), plan.Content, plan.Dynamic, &resp.Diagnostics)
+	if !ok {
+		return
+	}
+
 	createReq := dynuclient.CreateDNSRecordRequest{
 		NodeName:   recordNodeName(plan.NodeName, plan.Hostname, domainName),
-		RecordType: strings.TrimSpace(plan.RecordType.ValueString()),
-		Content:    stringPointerFromOptional(plan.Content),
+		RecordType: recordType,
+		Content:    stringPointerFromOptionalContent(plan.Content),
 		TTL:        int64FromOptional(plan.TTL),
 		State:      boolPointerFromOptional(plan.State),
 		Group:      stringFromOptional(plan.Group),
 		Host:       stringFromOptional(plan.Host),
 	}
-	if !validateDNSRecordContentForType(createReq.RecordType, createReq.Content, &resp.Diagnostics) {
+	if !validateDNSRecordContentForType(createReq.RecordType, createReq.Content, dynamicIntent, &resp.Diagnostics) {
 		return
 	}
 
 	record, err := r.clientProvider.client.CreateDNSRecord(ctx, domainID, createReq)
+	if err != nil && dynamicIntent && isUnsupportedEmptyContentError(err) {
+		if retryReq, retryOK := r.applyDynamicBootstrapFallback(ctx, domainID, createReq, &resp.Diagnostics); retryOK {
+			record, err = r.clientProvider.client.CreateDNSRecord(ctx, domainID, retryReq)
+		}
+	}
 	if err != nil {
 		addDNSRecordWriteDiagnostic("create", createReq.RecordType, createReq.Content, err, &resp.Diagnostics)
 		return
 	}
 
-	state := mapDNSRecordToState(*record)
-	if plan.Content.IsNull() || plan.Content.IsUnknown() {
-		state.Content = types.StringNull()
-	}
+	state := mapDNSRecordToState(*record, dynamicIntent)
 	state.ID = types.StringValue(formatDNSRecordID(record.DomainID, record.ID))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -185,10 +190,11 @@ func (r *dnsRecordResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 
-	nextState := mapDNSRecordToState(*record)
-	if state.Content.IsNull() {
-		nextState.Content = types.StringNull()
+	dynamicIntent := false
+	if !state.Dynamic.IsNull() && !state.Dynamic.IsUnknown() {
+		dynamicIntent = state.Dynamic.ValueBool()
 	}
+	nextState := mapDNSRecordToState(*record, dynamicIntent)
 	nextState.ID = state.ID
 	resp.Diagnostics.Append(resp.State.Set(ctx, &nextState)...)
 }
@@ -216,22 +222,45 @@ func (r *dnsRecordResource) Update(ctx context.Context, req resource.UpdateReque
 		domainName = resolvedDomainName
 	}
 
+	recordType := strings.TrimSpace(plan.RecordType.ValueString())
+	dynamicIntent, ok := resolveDynamicIntent(strings.ToUpper(recordType), plan.Content, plan.Dynamic, &resp.Diagnostics)
+	if !ok {
+		return
+	}
+
 	updateReq := dynuclient.UpdateDNSRecordRequest{
 		NodeName:   recordNodeName(plan.NodeName, plan.Hostname, domainName),
-		RecordType: strings.TrimSpace(plan.RecordType.ValueString()),
-		Content:    stringPointerFromOptional(plan.Content),
+		RecordType: recordType,
+		Content:    stringPointerFromOptionalContent(plan.Content),
 		TTL:        int64FromOptional(plan.TTL),
 		State:      boolPointerFromOptional(plan.State),
 		Group:      stringFromOptional(plan.Group),
 		Host:       stringFromOptional(plan.Host),
 	}
-	if !validateDNSRecordContentForType(updateReq.RecordType, updateReq.Content, &resp.Diagnostics) {
+	if !validateDNSRecordContentForType(updateReq.RecordType, updateReq.Content, dynamicIntent, &resp.Diagnostics) {
 		return
 	}
 
 	if _, err := r.clientProvider.client.UpdateDNSRecord(ctx, domainID, recordID, updateReq); err != nil {
-		addDNSRecordWriteDiagnostic("update", updateReq.RecordType, updateReq.Content, err, &resp.Diagnostics)
-		return
+		if dynamicIntent && isUnsupportedEmptyContentError(err) {
+			if retryReq, retryOK := r.applyDynamicBootstrapFallback(ctx, domainID, dynuclient.CreateDNSRecordRequest{
+				NodeName:   updateReq.NodeName,
+				RecordType: updateReq.RecordType,
+				Content:    updateReq.Content,
+				TTL:        updateReq.TTL,
+				State:      updateReq.State,
+				Group:      updateReq.Group,
+				Host:       updateReq.Host,
+			}, &resp.Diagnostics); retryOK {
+				updateReq.Content = retryReq.Content
+				updateReq.Group = retryReq.Group
+				_, err = r.clientProvider.client.UpdateDNSRecord(ctx, domainID, recordID, updateReq)
+			}
+		}
+		if err != nil {
+			addDNSRecordWriteDiagnostic("update", updateReq.RecordType, updateReq.Content, err, &resp.Diagnostics)
+			return
+		}
 	}
 
 	record, err := r.clientProvider.client.GetDNSRecord(ctx, domainID, recordID)
@@ -240,10 +269,7 @@ func (r *dnsRecordResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
-	nextState := mapDNSRecordToState(*record)
-	if plan.Content.IsNull() || plan.Content.IsUnknown() {
-		nextState.Content = types.StringNull()
-	}
+	nextState := mapDNSRecordToState(*record, dynamicIntent)
 	nextState.ID = types.StringValue(formatDNSRecordID(record.DomainID, record.ID))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &nextState)...)
 }
@@ -283,11 +309,13 @@ func (r *dnsRecordResource) ImportState(ctx context.Context, req resource.Import
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-func mapDNSRecordToState(record dynuclient.DNSRecord) dnsRecordResourceModel {
+func mapDNSRecordToState(record dynuclient.DNSRecord, dynamicIntent bool) dnsRecordResourceModel {
+	content := normalizeRecordContentForState(record.RecordType, record.Content, dynamicIntent)
 	return dnsRecordResourceModel{
 		Hostname:   mapString(record.Hostname),
 		RecordType: mapString(record.RecordType),
-		Content:    mapString(record.Content),
+		Content:    content,
+		Dynamic:    types.BoolValue(dynamicIntent),
 		TTL:        types.Int64Value(record.TTL),
 		State:      types.BoolValue(record.State),
 		Group:      mapString(record.Group),
@@ -357,21 +385,65 @@ func stringFromOptional(value types.String) string {
 	return strings.TrimSpace(value.ValueString())
 }
 
-func stringPointerFromOptional(value types.String) *string {
+func stringPointerFromOptionalContent(value types.String) *string {
 	if value.IsNull() || value.IsUnknown() {
 		return nil
 	}
 	trimmed := strings.TrimSpace(value.ValueString())
+	if trimmed == "" {
+		return nil
+	}
 	return &trimmed
 }
 
-func validateDNSRecordContentForType(recordType string, content *string, diagnostics *diag.Diagnostics) bool {
+func stringPointer(value string) *string {
+	return &value
+}
+
+func validateDNSRecordContentForType(recordType string, content *string, dynamicIntent bool, diagnostics *diag.Diagnostics) bool {
 	normalizedType := strings.ToUpper(strings.TrimSpace(recordType))
+	trimmedContent := ""
+	if content != nil {
+		trimmedContent = strings.TrimSpace(*content)
+	}
+
 	if normalizedType == "A" || normalizedType == "AAAA" {
+		if dynamicIntent && trimmedContent == "" {
+			return true
+		}
+		if trimmedContent == "" {
+			diagnostics.AddError(
+				"Missing static content for DNS record type",
+				fmt.Sprintf("The %q record type requires a non-empty content value unless dynamic mode is used.", normalizedType),
+			)
+			return false
+		}
+
+		addr, err := netip.ParseAddr(trimmedContent)
+		if err != nil {
+			diagnostics.AddError("Invalid DNS record content", fmt.Sprintf("Record type %q requires a valid IP address, got %q.", normalizedType, trimmedContent))
+			return false
+		}
+		if normalizedType == "A" && !addr.Is4() {
+			diagnostics.AddError("Invalid DNS record content", fmt.Sprintf("Record type %q requires an IPv4 address, got %q.", normalizedType, trimmedContent))
+			return false
+		}
+		if normalizedType == "AAAA" && !addr.Is6() {
+			diagnostics.AddError("Invalid DNS record content", fmt.Sprintf("Record type %q requires an IPv6 address, got %q.", normalizedType, trimmedContent))
+			return false
+		}
 		return true
 	}
 
-	if content == nil || strings.TrimSpace(*content) == "" {
+	if dynamicIntent {
+		diagnostics.AddError(
+			"Dynamic mode is only supported for A and AAAA",
+			fmt.Sprintf("The %q record type does not support omitted content.", normalizedType),
+		)
+		return false
+	}
+
+	if trimmedContent == "" {
 		diagnostics.AddError(
 			"Missing required content for DNS record type",
 			fmt.Sprintf("The %q record type requires a non-empty content value. Set the content attribute or choose a type that supports omitted content (A/AAAA).", normalizedType),
@@ -380,6 +452,111 @@ func validateDNSRecordContentForType(recordType string, content *string, diagnos
 	}
 
 	return true
+}
+
+func resolveDynamicIntent(recordType string, content types.String, dynamic types.Bool, diagnostics *diag.Diagnostics) (bool, bool) {
+	normalizedType := strings.ToUpper(strings.TrimSpace(recordType))
+	contentPtr := stringPointerFromOptionalContent(content)
+	contentPresent := contentPtr != nil && strings.TrimSpace(*contentPtr) != ""
+
+	explicitDynamic := false
+	if !dynamic.IsNull() && !dynamic.IsUnknown() {
+		explicitDynamic = dynamic.ValueBool()
+	}
+
+	if normalizedType != "A" && normalizedType != "AAAA" {
+		if explicitDynamic {
+			diagnostics.AddError("Invalid dynamic setting", fmt.Sprintf("record_type %q cannot use dynamic = true.", normalizedType))
+			return false, false
+		}
+		return false, true
+	}
+
+	if contentPresent && explicitDynamic {
+		diagnostics.AddError("Conflicting DNS record settings", "Set either content for static records or dynamic = true/omitted content for Dynu dynamic behavior.")
+		return false, false
+	}
+	if contentPresent {
+		return false, true
+	}
+	if explicitDynamic {
+		return true, true
+	}
+	return true, true
+}
+
+func normalizeRecordContentForState(recordType string, content string, dynamicIntent bool) types.String {
+	if dynamicIntent {
+		return types.StringNull()
+	}
+
+	normalizedType := strings.ToUpper(strings.TrimSpace(recordType))
+	trimmed := strings.TrimSpace(strings.Trim(strings.TrimSpace(content), "()"))
+	if trimmed == "" {
+		return types.StringNull()
+	}
+
+	switch normalizedType {
+	case "AAAA":
+		if addr, err := netip.ParseAddr(trimmed); err == nil && addr.Is6() {
+			return types.StringValue(addr.String())
+		}
+	case "A":
+		if addr, err := netip.ParseAddr(trimmed); err == nil && addr.Is4() {
+			return types.StringValue(addr.String())
+		}
+	case "CNAME":
+		return types.StringValue(strings.TrimSuffix(trimmed, "."))
+	}
+
+	return types.StringValue(trimmed)
+}
+
+func isUnsupportedEmptyContentError(err error) bool {
+	var apiErr *dynuclient.APIError
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != 400 {
+		return false
+	}
+	normalizedType := strings.ToLower(strings.TrimSpace(apiErr.Type))
+	if normalizedType != "validation exception" {
+		return false
+	}
+	normalizedMessage := strings.ToLower(strings.TrimSpace(apiErr.Message))
+	return strings.Contains(normalizedMessage, "content is required") ||
+		strings.Contains(normalizedMessage, "ipv4address is required") ||
+		strings.Contains(normalizedMessage, "ipv6address is required") ||
+		strings.Contains(normalizedMessage, "invalid ip address")
+}
+
+func (r *dnsRecordResource) applyDynamicBootstrapFallback(ctx context.Context, domainID int64, req dynuclient.CreateDNSRecordRequest, diagnostics *diag.Diagnostics) (dynuclient.CreateDNSRecordRequest, bool) {
+	if req.Content != nil {
+		return req, true
+	}
+	domain, err := r.clientProvider.client.GetDomainByID(ctx, domainID)
+	if err != nil {
+		diagnostics.AddError(diagnosticSummary("Unable to fetch Dynu domain for dynamic fallback", err), err.Error())
+		return req, false
+	}
+	switch strings.ToUpper(strings.TrimSpace(req.RecordType)) {
+	case "A":
+		if strings.TrimSpace(domain.IPv4Address) == "" {
+			diagnostics.AddError("Unable to emulate dynamic A record", "Dynu rejected omitted IPv4 content and the root domain has no IPv4 address to bootstrap from.")
+			return req, false
+		}
+		req.Content = stringPointer(strings.TrimSpace(domain.IPv4Address))
+	case "AAAA":
+		if strings.TrimSpace(domain.IPv6Address) == "" {
+			diagnostics.AddError("Unable to emulate dynamic AAAA record", "Dynu rejected omitted IPv6 content and the root domain has no IPv6 address to bootstrap from.")
+			return req, false
+		}
+		req.Content = stringPointer(strings.TrimSpace(domain.IPv6Address))
+	default:
+		return req, true
+	}
+	if strings.TrimSpace(req.Group) == "" {
+		req.Group = strings.TrimSpace(domain.Group)
+	}
+	return req, true
 }
 
 func addDNSRecordWriteDiagnostic(operation string, recordType string, content *string, err error, diagnostics *diag.Diagnostics) {

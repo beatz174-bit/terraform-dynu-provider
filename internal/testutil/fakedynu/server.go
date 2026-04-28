@@ -268,7 +268,11 @@ func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request, doma
 	if !ok {
 		return
 	}
-	if req.RecordType == "" || req.Content == "" {
+	if req.RecordType == "" {
+		s.writeAPIError(w, APIError{HTTPStatus: http.StatusBadRequest, StatusCode: 400, Type: "Validation Exception", Message: "recordType is required"})
+		return
+	}
+	if req.Content == "" && !strings.EqualFold(req.RecordType, "A") && !strings.EqualFold(req.RecordType, "AAAA") {
 		s.writeAPIError(w, APIError{HTTPStatus: http.StatusBadRequest, StatusCode: 400, Type: "Validation Exception", Message: "recordType and content are required"})
 		return
 	}

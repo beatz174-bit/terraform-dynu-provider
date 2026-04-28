@@ -157,7 +157,11 @@ Provider resources:
 Arguments:
 - `hostname` (String, required)
 - `record_type` (String, required)
-- `content` (String, required)
+- `content` (String, optional/computed)
+  - For `A` and `AAAA`, omitted/blank content means Dynu dynamic-IP intent.
+  - For non-`A`/`AAAA` record types, content is required.
+- `dynamic` (Bool, optional/computed)
+  - Explicit dynamic-mode toggle for `A`/`AAAA`. Existing omitted `content` behavior remains backward compatible.
 - `ttl` (Number, optional)
 - `state` (Bool, optional)
 - `group` (String, optional)
@@ -181,7 +185,18 @@ resource "dynu_dns_record" "txt" {
   ttl         = 300
   state       = true
 }
+
+resource "dynu_dns_record" "dynamic_a" {
+  hostname    = "auth.example.com"
+  record_type = "A"
+  # content intentionally omitted for Dynu dynamic IPv4 behavior
+}
 ```
+
+Notes:
+- Dynu control-panel semantics treat blank `A`/`AAAA` values as dynamic/inherited records, not invalid static records.
+- Dynu can surface inherited/current values with parentheses in the UI (for example `(203.0.113.10)`); provider state preserves dynamic intent to avoid perpetual drift from changing live IPs.
+- The provider avoids sending empty-string IP payloads, and if Dynu rejects omitted IP fields in an API path, it uses a documented fallback emulation path based on the root domain current address/group metadata.
 
 ## Data source schema reference
 
