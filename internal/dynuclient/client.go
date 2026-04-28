@@ -322,10 +322,11 @@ type dnsRecordUpsertPayload struct {
 }
 
 func buildDNSRecordUpsertPayload(recordType string, nodeName string, content *string, ttl int64, state *bool, group string, host string) dnsRecordUpsertPayload {
+	normalizedContent := normalizeOptionalContent(content)
 	payload := dnsRecordUpsertPayload{
 		NodeName:   nodeName,
 		RecordType: recordType,
-		Content:    content,
+		Content:    normalizedContent,
 		TTL:        ttl,
 		State:      state,
 		Group:      group,
@@ -334,20 +335,31 @@ func buildDNSRecordUpsertPayload(recordType string, nodeName string, content *st
 
 	switch strings.ToUpper(strings.TrimSpace(recordType)) {
 	case "A":
-		if content != nil {
-			payload.IPv4Address = *content
+		if normalizedContent != nil {
+			payload.IPv4Address = *normalizedContent
 		}
 	case "AAAA":
-		if content != nil {
-			payload.IPv6Address = *content
+		if normalizedContent != nil {
+			payload.IPv6Address = *normalizedContent
 		}
 	case "CNAME":
-		if payload.Host == "" && content != nil {
-			payload.Host = *content
+		if payload.Host == "" && normalizedContent != nil {
+			payload.Host = *normalizedContent
 		}
 	}
 
 	return payload
+}
+
+func normalizeOptionalContent(content *string) *string {
+	if content == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*content)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
 }
 
 var zoneStyleContentPattern = regexp.MustCompile(`(?i)^\S+\.\s+\d+\s+IN\s+\S+\s+(.+)$`)

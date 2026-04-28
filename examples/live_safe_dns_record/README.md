@@ -9,8 +9,8 @@ Using a single suffix (`test_suffix`), this example creates five DNS record scen
 1. `A` record with IPv4 content (`codex-a-<suffix>.<root_domain>`)
 2. `AAAA` record with IPv6 content (`codex-aaaa-<suffix>.<root_domain>`)
 3. `CNAME` record (`codex-cname-<suffix>.<root_domain>`)
-4. **Blank `A` record** with no content/IP (`codex-blank-a-<suffix>.<root_domain>`)
-5. **Blank `AAAA` record** with no content/IP (`codex-blank-aaaa-<suffix>.<root_domain>`)
+4. **Dynamic `A` record** with omitted content (`codex-dynamic-a-<suffix>.<root_domain>`)
+5. **Dynamic `AAAA` record** with omitted content (`codex-dynamic-aaaa-<suffix>.<root_domain>`)
 
 > [!WARNING]
 > Do not use a suffix that overlaps important existing hostnames. This example is intended only for disposable test records that you can safely destroy.
@@ -52,5 +52,15 @@ terraform destroy
   - `dynu_dns_record.a_ipv4`
   - `dynu_dns_record.aaaa_ipv6`
   - `dynu_dns_record.cname`
-  - `dynu_dns_record.blank_a`
-  - `dynu_dns_record.blank_aaaa`
+  - `dynu_dns_record.dynamic_a`
+  - `dynu_dns_record.dynamic_aaaa`
+
+Verification commands:
+
+```bash
+dig A codex-dynamic-a-<suffix>.<root_domain>
+dig AAAA codex-dynamic-aaaa-<suffix>.<root_domain>
+dig CNAME codex-cname-<suffix>.<root_domain>
+```
+
+`dig <hostname>` defaults to an `A` lookup, which can be misleading for AAAA-only checks.

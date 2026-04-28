@@ -192,7 +192,7 @@ func testAccCreateRecordMaybeSkipUnsupported(t *testing.T, client *dynuclient.Cl
 	}
 
 	var apiErr *dynuclient.APIError
-	if errors.As(err, &apiErr) && isUnsupportedEmptyContentAPIError(apiErr) {
+	if errors.As(err, &apiErr) && isUnsupportedEmptyContentError(apiErr) {
 		t.Skipf("Dynu account/API does not support %s in this environment (%v)", scenario, err)
 	}
 
@@ -220,31 +220,6 @@ func testAccDeleteRecord(t *testing.T, client *dynuclient.Client, domainID int64
 	if err := client.DeleteDNSRecord(context.Background(), domainID, recordID); err != nil {
 		t.Fatalf("DeleteDNSRecord() cleanup failed: %v", err)
 	}
-}
-
-func isUnsupportedEmptyContentAPIError(apiErr *dynuclient.APIError) bool {
-	if apiErr == nil || apiErr.StatusCode != 400 {
-		return false
-	}
-
-	normalizedType := strings.ToLower(strings.TrimSpace(apiErr.Type))
-	if normalizedType != "validation exception" {
-		return false
-	}
-
-	normalizedMessage := strings.ToLower(strings.TrimSpace(apiErr.Message))
-	knownUnsupportedMessages := []string{
-		"content is required",
-		"ipv4address is required",
-		"ipv6address is required",
-	}
-	for _, fragment := range knownUnsupportedMessages {
-		if strings.Contains(normalizedMessage, fragment) {
-			return true
-		}
-	}
-
-	return false
 }
 
 func TestIsUnsupportedEmptyContentAPIError(t *testing.T) {
@@ -297,7 +272,7 @@ func TestIsUnsupportedEmptyContentAPIError(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			if got := isUnsupportedEmptyContentAPIError(tc.err); got != tc.expect {
+			if got := isUnsupportedEmptyContentError(tc.err); got != tc.expect {
 				t.Fatalf("unexpected result for %q: got %v, want %v", tc.name, got, tc.expect)
 			}
 		})

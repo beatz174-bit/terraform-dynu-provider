@@ -4,8 +4,8 @@ output "record_hostnames" {
     a_ipv4     = dynu_dns_record.a_ipv4.hostname
     aaaa_ipv6  = dynu_dns_record.aaaa_ipv6.hostname
     cname      = dynu_dns_record.cname.hostname
-    blank_a    = dynu_dns_record.blank_a.hostname
-    blank_aaaa = dynu_dns_record.blank_aaaa.hostname
+    dynamic_a    = dynu_dns_record.dynamic_a.hostname
+    dynamic_aaaa = dynu_dns_record.dynamic_aaaa.hostname
   }
 }
 
@@ -15,13 +15,13 @@ output "record_ids" {
     a_ipv4     = dynu_dns_record.a_ipv4.id
     aaaa_ipv6  = dynu_dns_record.aaaa_ipv6.id
     cname      = dynu_dns_record.cname.id
-    blank_a    = dynu_dns_record.blank_a.id
-    blank_aaaa = dynu_dns_record.blank_aaaa.id
+    dynamic_a    = dynu_dns_record.dynamic_a.id
+    dynamic_aaaa = dynu_dns_record.dynamic_aaaa.id
   }
 }
 
 output "record_values" {
-  description = "Record type/content summary for each scenario; blank records intentionally omit content."
+  description = "Record type/content summary for each scenario; dynamic A/AAAA intentionally omit content."
   value = {
     a_ipv4 = {
       type    = dynu_dns_record.a_ipv4.record_type
@@ -35,13 +35,13 @@ output "record_values" {
       type    = dynu_dns_record.cname.record_type
       content = dynu_dns_record.cname.content
     }
-    blank_a = {
-      type    = dynu_dns_record.blank_a.record_type
-      content = dynu_dns_record.blank_a.content
+    dynamic_a = {
+      type    = dynu_dns_record.dynamic_a.record_type
+      content = dynu_dns_record.dynamic_a.content
     }
-    blank_aaaa = {
-      type    = dynu_dns_record.blank_aaaa.record_type
-      content = dynu_dns_record.blank_aaaa.content
+    dynamic_aaaa = {
+      type    = dynu_dns_record.dynamic_aaaa.record_type
+      content = dynu_dns_record.dynamic_aaaa.content
     }
   }
 }

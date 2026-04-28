@@ -9,8 +9,8 @@ locals {
   hostname_a_ipv4    = "codex-a-${var.test_suffix}.${var.dynu_root_domain}"
   hostname_aaaa_ipv6 = "codex-aaaa-${var.test_suffix}.${var.dynu_root_domain}"
   hostname_cname     = "codex-cname-${var.test_suffix}.${var.dynu_root_domain}"
-  hostname_blank_a   = "codex-blank-a-${var.test_suffix}.${var.dynu_root_domain}"
-  hostname_blank_aaaa = "codex-blank-aaaa-${var.test_suffix}.${var.dynu_root_domain}"
+  hostname_dynamic_a    = "codex-dynamic-a-${var.test_suffix}.${var.dynu_root_domain}"
+  hostname_dynamic_aaaa = "codex-dynamic-aaaa-${var.test_suffix}.${var.dynu_root_domain}"
 }
 
 resource "dynu_dns_record" "a_ipv4" {
@@ -37,17 +37,17 @@ resource "dynu_dns_record" "cname" {
   state       = true
 }
 
-# Deliberate blank A record scenario: A type with no content/IP value.
-resource "dynu_dns_record" "blank_a" {
-  hostname    = local.hostname_blank_a
+# Deliberate dynamic A record scenario: content intentionally omitted for Dynu dynamic IPv4 behavior.
+resource "dynu_dns_record" "dynamic_a" {
+  hostname    = local.hostname_dynamic_a
   record_type = "A"
   ttl         = var.test_ttl
   state       = true
 }
 
-# Deliberate blank AAAA record scenario: AAAA type with no content/IP value.
-resource "dynu_dns_record" "blank_aaaa" {
-  hostname    = local.hostname_blank_aaaa
+# Deliberate dynamic AAAA record scenario: content intentionally omitted for Dynu dynamic IPv6 behavior.
+resource "dynu_dns_record" "dynamic_aaaa" {
+  hostname    = local.hostname_dynamic_aaaa
   record_type = "AAAA"
   ttl         = var.test_ttl
   state       = true
