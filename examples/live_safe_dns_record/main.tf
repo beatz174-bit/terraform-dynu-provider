@@ -19,7 +19,6 @@ resource "dynu_dns_record" "a_ipv4" {
   content     = var.test_ipv4
   ttl         = 90
   enabled     = true
-  location    = var.test_location
 }
 
 resource "dynu_dns_record" "aaaa_ipv6" {
@@ -28,7 +27,6 @@ resource "dynu_dns_record" "aaaa_ipv6" {
   content     = var.test_ipv6
   ttl         = var.test_ttl
   enabled     = true
-  location    = var.test_location
 }
 
 resource "dynu_dns_record" "cname" {

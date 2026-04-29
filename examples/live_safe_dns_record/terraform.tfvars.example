@@ -14,4 +14,3 @@ test_ipv6         = "2001:db8::123"
 test_cname_target = "example.com"
 
 test_ttl = 300
-test_location = "us"

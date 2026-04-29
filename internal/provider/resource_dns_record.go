@@ -43,7 +43,6 @@ type dnsRecordResourceModel struct {
 	Enabled    types.Bool   `tfsdk:"enabled"`
 	Group      types.String `tfsdk:"group"`
 	Host       types.String `tfsdk:"host"`
-	Location   types.String `tfsdk:"location"`
 	NodeName   types.String `tfsdk:"node_name"`
 	DomainID   types.Int64  `tfsdk:"domain_id"`
 	DomainName types.String `tfsdk:"domain_name"`
@@ -83,7 +82,6 @@ func (r *dnsRecordResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 			"enabled":     schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), Description: "Whether this DNS record is enabled/active."},
 			"group":       schema.StringAttribute{Optional: true, Computed: true, Description: "Dynu group value for this record."},
 			"host":        schema.StringAttribute{Optional: true, Computed: true, Description: "Host field for supported Dynu record types."},
-			"location":    schema.StringAttribute{Optional: true, Computed: true, Description: "Dynu location hint for A/AAAA records only."},
 			"node_name":   schema.StringAttribute{Optional: true, Computed: true, Description: "Node/label portion of the record."},
 			"domain_id":   schema.Int64Attribute{Computed: true, Description: "Dynu domain ID resolved from hostname."},
 			"domain_name": schema.StringAttribute{Computed: true, Description: "Dynu root domain name resolved from hostname."},
@@ -122,7 +120,6 @@ func (r *dnsRecordResource) ValidateConfig(ctx context.Context, req resource.Val
 	}
 	validateDNSRecordContentForTypeWithKnowledge(recordType, content, contentKnown, dynamicIntent, &resp.Diagnostics)
 	validateDNSRecordTTL(config.TTL, &resp.Diagnostics)
-	validateDNSRecordLocation(recordType, config.Location, &resp.Diagnostics)
 }
 
 func (r *dnsRecordResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -152,16 +149,12 @@ func (r *dnsRecordResource) Create(ctx context.Context, req resource.CreateReque
 		State:      boolPointerFromOptional(plan.Enabled),
 		Group:      stringFromOptional(plan.Group),
 		Host:       stringFromOptional(plan.Host),
-		Location:   stringFromOptional(plan.Location),
 	}
 	createReq = normalizeDNSRecordCreateRequestForType(createReq)
 	if !validateDNSRecordContentForType(createReq.RecordType, createReq.Content, dynamicIntent, &resp.Diagnostics) {
 		return
 	}
 	if !validateRecordTTLSeconds(createReq.TTL, &resp.Diagnostics) {
-		return
-	}
-	if !validateLocationForType(createReq.RecordType, createReq.Location, &resp.Diagnostics) {
 		return
 	}
 
@@ -256,16 +249,12 @@ func (r *dnsRecordResource) Update(ctx context.Context, req resource.UpdateReque
 		State:      boolPointerFromOptional(preferKnownBool(plan.Enabled, state.Enabled)),
 		Group:      stringFromOptional(preferKnownString(plan.Group, state.Group)),
 		Host:       stringFromOptional(preferKnownString(plan.Host, state.Host)),
-		Location:   locationForUpdate(recordType, plan.Location, state.Location),
 	}
 	updateReq = normalizeDNSRecordUpdateRequestForType(updateReq)
 	if !validateDNSRecordContentForType(updateReq.RecordType, updateReq.Content, dynamicIntent, &resp.Diagnostics) {
 		return
 	}
 	if !validateRecordTTLSeconds(updateReq.TTL, &resp.Diagnostics) {
-		return
-	}
-	if !validateLocationForType(updateReq.RecordType, updateReq.Location, &resp.Diagnostics) {
 		return
 	}
 
@@ -279,7 +268,6 @@ func (r *dnsRecordResource) Update(ctx context.Context, req resource.UpdateReque
 				State:      updateReq.State,
 				Group:      updateReq.Group,
 				Host:       updateReq.Host,
-				Location:   updateReq.Location,
 			}, &resp.Diagnostics); retryOK {
 				updateReq.Content = retryReq.Content
 				updateReq.Group = retryReq.Group
@@ -349,7 +337,6 @@ func mapDNSRecordToState(record dynuclient.DNSRecord, dynamicIntent bool) dnsRec
 		Enabled:    types.BoolValue(record.State),
 		Group:      mapString(record.Group),
 		Host:       mapString(record.Host),
-		Location:   mapString(record.Location),
 		NodeName:   mapString(record.NodeName),
 		DomainID:   types.Int64Value(record.DomainID),
 		DomainName: mapString(record.DomainName),
@@ -581,33 +568,6 @@ func validateRecordTTLSeconds(ttl int64, diagnostics *diag.Diagnostics) bool {
 		return false
 	}
 	return true
-}
-
-func validateDNSRecordLocation(recordType string, location types.String, diagnostics *diag.Diagnostics) {
-	if location.IsNull() || location.IsUnknown() {
-		return
-	}
-	validateLocationForType(recordType, location.ValueString(), diagnostics)
-}
-
-func validateLocationForType(recordType string, location string, diagnostics *diag.Diagnostics) bool {
-	if strings.TrimSpace(location) == "" {
-		return true
-	}
-	normalizedType := strings.ToUpper(strings.TrimSpace(recordType))
-	if normalizedType != "A" && normalizedType != "AAAA" {
-		diagnostics.AddError("Invalid location", fmt.Sprintf("location is only supported for A and AAAA records, got %q.", normalizedType))
-		return false
-	}
-	return true
-}
-
-func locationForUpdate(recordType string, planLocation types.String, stateLocation types.String) string {
-	normalizedType := strings.ToUpper(strings.TrimSpace(recordType))
-	if normalizedType != "A" && normalizedType != "AAAA" {
-		return stringFromOptional(planLocation)
-	}
-	return stringFromOptional(preferKnownString(planLocation, stateLocation))
 }
 
 func resolveDynamicIntent(recordType string, content types.String, dynamic types.Bool, diagnostics *diag.Diagnostics) (bool, bool) {

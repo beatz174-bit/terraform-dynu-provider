@@ -166,7 +166,6 @@ Arguments:
 - `enabled` (Bool, optional, defaults to `true`)
 - `group` (String, optional)
 - `host` (String, optional)
-- `location` (String, optional; A/AAAA only)
 - `node_name` (String, optional)
 
 Attributes:
@@ -185,7 +184,6 @@ resource "dynu_dns_record" "txt" {
   content     = "198.51.100.10"
   ttl         = 90
   enabled     = false
-  location    = "us"
 }
 
 resource "dynu_dns_record" "dynamic_a" {
@@ -246,7 +244,7 @@ Attributes:
 - `domain_name` (String)
 - `records` (List(Object)) with:
   - `id`, `domain_id`, `domain_name`, `node_name`, `hostname`, `record_type`
-  - `ttl`, `state`, `content`, `updated_on`, `group`, `host`, `location`
+  - `ttl`, `state`, `content`, `updated_on`, `group`, `host`
 
 Example:
 

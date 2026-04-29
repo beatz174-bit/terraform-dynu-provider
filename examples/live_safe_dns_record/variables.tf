@@ -64,9 +64,3 @@ variable "test_ttl" {
   type        = number
   default     = 300
 }
-
-variable "test_location" {
-  description = "Optional Dynu location hint for A/AAAA records."
-  type        = string
-  default     = "us"
-}
