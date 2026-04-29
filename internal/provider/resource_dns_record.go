@@ -198,18 +198,26 @@ func (r *dnsRecordResource) Read(ctx context.Context, req resource.ReadRequest, 
 
 func (r *dnsRecordResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan dnsRecordResourceModel
+	var state dnsRecordResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	domainID, recordID, err := parseDNSRecordID(plan.ID.ValueString())
+	domainID, recordID, err := parseDNSRecordID(state.ID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid resource ID", err.Error())
 		return
 	}
 
-	domainName := strings.TrimSpace(plan.DomainName.ValueString())
+	domainName := ""
+	if !plan.DomainName.IsNull() && !plan.DomainName.IsUnknown() {
+		domainName = strings.TrimSpace(plan.DomainName.ValueString())
+	}
+	if domainName == "" && !state.DomainName.IsNull() && !state.DomainName.IsUnknown() {
+		domainName = strings.TrimSpace(state.DomainName.ValueString())
+	}
 	if domainName == "" {
 		_, resolvedDomainName, err := r.clientProvider.client.GetRootDomain(ctx, plan.Hostname.ValueString())
 		if err != nil {
@@ -267,7 +275,7 @@ func (r *dnsRecordResource) Update(ctx context.Context, req resource.UpdateReque
 	}
 
 	nextState := mapDNSRecordToState(*record, dynamicIntent)
-	nextState.ID = types.StringValue(formatDNSRecordID(record.DomainID, record.ID))
+	nextState.ID = state.ID
 	resp.Diagnostics.Append(resp.State.Set(ctx, &nextState)...)
 }
 

@@ -64,7 +64,7 @@ func TestIntegrationResourceDNSRecordLifecycleAndImport(t *testing.T) {
 	}
 
 	updateResp := resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
-	r.Update(ctx, resource.UpdateRequest{Plan: plan}, &updateResp)
+	r.Update(ctx, resource.UpdateRequest{Plan: plan, State: createResp.State}, &updateResp)
 	if updateResp.Diagnostics.HasError() {
 		t.Fatalf("update diagnostics: %v", updateResp.Diagnostics)
 	}
@@ -204,7 +204,7 @@ func TestIntegrationResourceDNSRecordDynamicAStateStableAndTransitionToStatic(t 
 	}
 
 	updateResp := resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
-	r.Update(ctx, resource.UpdateRequest{Plan: plan}, &updateResp)
+	r.Update(ctx, resource.UpdateRequest{Plan: plan, State: createResp.State}, &updateResp)
 	if updateResp.Diagnostics.HasError() {
 		t.Fatalf("update diagnostics: %v", updateResp.Diagnostics)
 	}
@@ -216,6 +216,80 @@ func TestIntegrationResourceDNSRecordDynamicAStateStableAndTransitionToStatic(t 
 	}
 	if state.Content.ValueString() != "192.0.2.42" {
 		t.Fatalf("expected static content after update, got %q", state.Content.ValueString())
+	}
+}
+
+func TestIntegrationResourceDNSRecordUpdateUsesStateIDWhenPlanIDUnknown(t *testing.T) {
+	ctx := context.Background()
+	fake := fakedynu.NewServer()
+	defer fake.Close()
+
+	r := NewDNSRecordResource().(*dnsRecordResource)
+	configureResource(t, r, fake.BaseURL())
+
+	var schemaResp resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &schemaResp)
+
+	createPlan := dnsRecordResourceModel{
+		Hostname:   types.StringValue("api.a.example.com"),
+		RecordType: types.StringValue("A"),
+		Content:    types.StringValue("192.0.2.123"),
+		TTL:        types.Int64Value(60),
+		State:      types.BoolValue(true),
+		Group:      types.StringValue("test"),
+		Host:       types.StringNull(),
+		NodeName:   types.StringNull(),
+	}
+
+	plan := tfsdk.Plan{Schema: schemaResp.Schema}
+	if diags := plan.Set(ctx, &createPlan); diags.HasError() {
+		t.Fatalf("set create plan diagnostics: %v", diags)
+	}
+
+	createResp := resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	r.Create(ctx, resource.CreateRequest{Plan: plan}, &createResp)
+	if createResp.Diagnostics.HasError() {
+		t.Fatalf("create diagnostics: %v", createResp.Diagnostics)
+	}
+
+	var state dnsRecordResourceModel
+	if diags := createResp.State.Get(ctx, &state); diags.HasError() {
+		t.Fatalf("state get diagnostics: %v", diags)
+	}
+
+	updatePlan := state
+	updatePlan.ID = types.StringUnknown()
+	updatePlan.DomainID = types.Int64Unknown()
+	updatePlan.DomainName = types.StringUnknown()
+	updatePlan.Dynamic = types.BoolUnknown()
+	updatePlan.Group = types.StringUnknown()
+	updatePlan.Host = types.StringUnknown()
+	updatePlan.NodeName = types.StringUnknown()
+	updatePlan.UpdatedOn = types.StringUnknown()
+	updatePlan.Content = types.StringValue("192.0.3.123")
+
+	plan = tfsdk.Plan{Schema: schemaResp.Schema}
+	if diags := plan.Set(ctx, &updatePlan); diags.HasError() {
+		t.Fatalf("set update plan diagnostics: %v", diags)
+	}
+
+	updateResp := resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	r.Update(ctx, resource.UpdateRequest{
+		Plan:  plan,
+		State: createResp.State,
+	}, &updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %v", updateResp.Diagnostics)
+	}
+
+	if diags := updateResp.State.Get(ctx, &state); diags.HasError() {
+		t.Fatalf("updated state diagnostics: %v", diags)
+	}
+	if state.ID.IsNull() || state.ID.IsUnknown() {
+		t.Fatalf("expected ID to remain known after update")
+	}
+	if state.Content.ValueString() != "192.0.3.123" {
+		t.Fatalf("expected updated content, got %q", state.Content.ValueString())
 	}
 }
 
