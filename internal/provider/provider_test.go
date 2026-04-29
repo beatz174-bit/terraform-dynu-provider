@@ -67,6 +67,7 @@ func TestDiagnosticSummary(t *testing.T) {
 		{name: "non api error", err: os.ErrNotExist, summary: "Unable to list Dynu domains", want: "Unable to list Dynu domains"},
 		{name: "auth error", err: &dynuclient.APIError{StatusCode: 401, Type: "Unauthorized", Message: "invalid"}, summary: "Unable to list Dynu domains", want: "Unable to list Dynu domains (authentication failed)"},
 		{name: "not found", err: &dynuclient.APIError{StatusCode: 404, Type: "Not Found", Message: "missing"}, summary: "Unable to resolve Dynu domain from hostname", want: "Unable to resolve Dynu domain from hostname (not found)"},
+		{name: "404 validation exception", err: &dynuclient.APIError{StatusCode: 404, Type: "Request Exception", Message: "Invalid."}, summary: "Unable to update Dynu DNS record", want: "Unable to update Dynu DNS record"},
 	}
 
 	for _, tc := range tests {

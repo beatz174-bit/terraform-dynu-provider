@@ -2,6 +2,7 @@ package provider
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/dynu/terraform-provider-dynu/internal/dynuclient"
 )
@@ -16,7 +17,11 @@ func diagnosticSummary(defaultSummary string, err error) string {
 	case 401, 403:
 		return defaultSummary + " (authentication failed)"
 	case 404:
-		return defaultSummary + " (not found)"
+		normalizedType := strings.ToLower(strings.TrimSpace(apiErr.Type))
+		if strings.Contains(normalizedType, "not found") {
+			return defaultSummary + " (not found)"
+		}
+		return defaultSummary
 	default:
 		return defaultSummary
 	}
