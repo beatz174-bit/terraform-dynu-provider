@@ -343,7 +343,7 @@ func buildDNSRecordUpsertPayload(recordType string, nodeName string, content *st
 			payload.IPv6Address = *normalizedContent
 		}
 	case "CNAME":
-		if payload.Host == "" && normalizedContent != nil {
+		if normalizedContent != nil {
 			payload.Host = *normalizedContent
 		}
 	default:

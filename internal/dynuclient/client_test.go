@@ -290,6 +290,34 @@ func TestClientCreateDNSRecordSendsHostForCNAMERecord(t *testing.T) {
 	}
 }
 
+func TestClientUpdateDNSRecordCNAMEContentOverridesHost(t *testing.T) {
+	var captured map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/dns/1001/record/11" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
+			t.Fatalf("failed to decode payload: %v", err)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"statusCode": 200, "id": 11, "domainId": 1001, "recordType": "CNAME", "host": "example.co"})
+	}))
+	defer server.Close()
+
+	client := dynuclient.New("test-key", dynuclient.WithBaseURL(server.URL), dynuclient.WithHTTPClient(server.Client()))
+	_, err := client.UpdateDNSRecord(context.Background(), 1001, 11, dynuclient.UpdateDNSRecordRequest{
+		NodeName:   "alias",
+		RecordType: "CNAME",
+		Content:    stringPointer("example.co"),
+		Host:       "example.com",
+	})
+	if err != nil {
+		t.Fatalf("UpdateDNSRecord() error = %v", err)
+	}
+	if captured["host"] != "example.co" {
+		t.Fatalf("expected host to be overridden by content, got %#v", captured["host"])
+	}
+}
+
 func TestClientCreateDNSRecordSendsContentForTXTRecord(t *testing.T) {
 	var captured map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

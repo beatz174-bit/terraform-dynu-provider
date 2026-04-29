@@ -146,6 +146,7 @@ func (r *dnsRecordResource) Create(ctx context.Context, req resource.CreateReque
 		Group:      stringFromOptional(plan.Group),
 		Host:       stringFromOptional(plan.Host),
 	}
+	createReq = normalizeDNSRecordCreateRequestForType(createReq)
 	if !validateDNSRecordContentForType(createReq.RecordType, createReq.Content, dynamicIntent, &resp.Diagnostics) {
 		return
 	}
@@ -242,6 +243,7 @@ func (r *dnsRecordResource) Update(ctx context.Context, req resource.UpdateReque
 		Group:      stringFromOptional(preferKnownString(plan.Group, state.Group)),
 		Host:       stringFromOptional(preferKnownString(plan.Host, state.Host)),
 	}
+	updateReq = normalizeDNSRecordUpdateRequestForType(updateReq)
 	if !validateDNSRecordContentForType(updateReq.RecordType, updateReq.Content, dynamicIntent, &resp.Diagnostics) {
 		return
 	}
@@ -315,7 +317,7 @@ func (r *dnsRecordResource) ImportState(ctx context.Context, req resource.Import
 }
 
 func mapDNSRecordToState(record dynuclient.DNSRecord, dynamicIntent bool) dnsRecordResourceModel {
-	content := normalizeRecordContentForState(record.RecordType, record.Content, dynamicIntent)
+	content := normalizeRecordContentForState(record.RecordType, record.Content, dynamicIntent, record.Host)
 	return dnsRecordResourceModel{
 		Hostname:   mapString(record.Hostname),
 		RecordType: mapString(record.RecordType),
@@ -442,6 +444,35 @@ func stringPointer(value string) *string {
 	return &value
 }
 
+func normalizeDNSRecordCreateRequestForType(req dynuclient.CreateDNSRecordRequest) dynuclient.CreateDNSRecordRequest {
+	if strings.EqualFold(strings.TrimSpace(req.RecordType), "CNAME") {
+		if normalizedContent := normalizeOptionalContentString(req.Content); normalizedContent != nil {
+			req.Host = *normalizedContent
+		}
+	}
+	return req
+}
+
+func normalizeDNSRecordUpdateRequestForType(req dynuclient.UpdateDNSRecordRequest) dynuclient.UpdateDNSRecordRequest {
+	if strings.EqualFold(strings.TrimSpace(req.RecordType), "CNAME") {
+		if normalizedContent := normalizeOptionalContentString(req.Content); normalizedContent != nil {
+			req.Host = *normalizedContent
+		}
+	}
+	return req
+}
+
+func normalizeOptionalContentString(content *string) *string {
+	if content == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*content)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
+}
+
 func validateDNSRecordContentForType(recordType string, content *string, dynamicIntent bool, diagnostics *diag.Diagnostics) bool {
 	return validateDNSRecordContentForTypeWithKnowledge(recordType, content, true, dynamicIntent, diagnostics)
 }
@@ -548,7 +579,7 @@ func inferDynamicIntentFromState(recordType types.String, content types.String, 
 	return content.IsNull() || (content.IsUnknown())
 }
 
-func normalizeRecordContentForState(recordType string, content string, dynamicIntent bool) types.String {
+func normalizeRecordContentForState(recordType string, content string, dynamicIntent bool, host string) types.String {
 	if dynamicIntent {
 		return types.StringNull()
 	}
@@ -569,6 +600,9 @@ func normalizeRecordContentForState(recordType string, content string, dynamicIn
 			return types.StringValue(addr.String())
 		}
 	case "CNAME":
+		if trimmedHost := strings.TrimSpace(host); trimmedHost != "" {
+			return types.StringValue(strings.TrimSuffix(trimmedHost, "."))
+		}
 		return types.StringValue(strings.TrimSuffix(trimmed, "."))
 	}
 

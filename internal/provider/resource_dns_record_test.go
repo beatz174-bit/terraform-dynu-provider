@@ -146,14 +146,30 @@ func TestStringPointerFromOptionalContentForValidation(t *testing.T) {
 }
 
 func TestNormalizeRecordContentForState(t *testing.T) {
-	if got := normalizeRecordContentForState("AAAA", "2001:0db8:0000:0000:0000:0000:0000:0123", false); got.ValueString() != "2001:db8::123" {
+	if got := normalizeRecordContentForState("AAAA", "2001:0db8:0000:0000:0000:0000:0000:0123", false, ""); got.ValueString() != "2001:db8::123" {
 		t.Fatalf("expected canonical IPv6, got %q", got.ValueString())
 	}
-	if got := normalizeRecordContentForState("CNAME", "Example.COM.", false); got.ValueString() != "Example.COM" {
+	if got := normalizeRecordContentForState("CNAME", "Example.COM.", false, ""); got.ValueString() != "Example.COM" {
 		t.Fatalf("expected trailing dot removed, got %q", got.ValueString())
 	}
-	if got := normalizeRecordContentForState("A", "(167.179.167.166)", true); !got.IsNull() {
+	if got := normalizeRecordContentForState("CNAME", "old.example.com", false, "new.example.co."); got.ValueString() != "new.example.co" {
+		t.Fatalf("expected CNAME content to come from host, got %q", got.ValueString())
+	}
+	if got := normalizeRecordContentForState("A", "(167.179.167.166)", true, ""); !got.IsNull() {
 		t.Fatalf("expected dynamic content to remain null, got %q", got.ValueString())
+	}
+}
+
+func TestNormalizeDNSRecordUpdateRequestForType(t *testing.T) {
+	oldHost := "example.com"
+	newContent := "example.co"
+	req := normalizeDNSRecordUpdateRequestForType(dynuclient.UpdateDNSRecordRequest{
+		RecordType: "CNAME",
+		Content:    &newContent,
+		Host:       oldHost,
+	})
+	if req.Host != "example.co" {
+		t.Fatalf("expected CNAME host to be normalized from content, got %q", req.Host)
 	}
 }
 
