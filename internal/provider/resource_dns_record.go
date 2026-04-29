@@ -110,12 +110,12 @@ func (r *dnsRecordResource) ValidateConfig(ctx context.Context, req resource.Val
 	if skip {
 		return
 	}
-	content := stringPointerFromOptionalContent(config.Content)
+	content, contentKnown := stringPointerFromOptionalContentForValidation(config.Content)
 	dynamicIntent, ok := resolveDynamicIntent(recordType, config.Content, config.Dynamic, &resp.Diagnostics)
 	if !ok {
 		return
 	}
-	validateDNSRecordContentForType(recordType, content, dynamicIntent, &resp.Diagnostics)
+	validateDNSRecordContentForTypeWithKnowledge(recordType, content, contentKnown, dynamicIntent, &resp.Diagnostics)
 }
 
 func (r *dnsRecordResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -393,11 +393,22 @@ func stringPointerFromOptionalContent(value types.String) *string {
 	return &trimmed
 }
 
+func stringPointerFromOptionalContentForValidation(value types.String) (*string, bool) {
+	if value.IsUnknown() {
+		return nil, false
+	}
+	return stringPointerFromOptionalContent(value), true
+}
+
 func stringPointer(value string) *string {
 	return &value
 }
 
 func validateDNSRecordContentForType(recordType string, content *string, dynamicIntent bool, diagnostics *diag.Diagnostics) bool {
+	return validateDNSRecordContentForTypeWithKnowledge(recordType, content, true, dynamicIntent, diagnostics)
+}
+
+func validateDNSRecordContentForTypeWithKnowledge(recordType string, content *string, contentKnown bool, dynamicIntent bool, diagnostics *diag.Diagnostics) bool {
 	normalizedType := strings.ToUpper(strings.TrimSpace(recordType))
 	trimmedContent := ""
 	if content != nil {
@@ -438,6 +449,10 @@ func validateDNSRecordContentForType(recordType string, content *string, dynamic
 			fmt.Sprintf("The %q record type does not support omitted content.", normalizedType),
 		)
 		return false
+	}
+
+	if !contentKnown {
+		return true
 	}
 
 	if trimmedContent == "" {
