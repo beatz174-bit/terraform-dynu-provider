@@ -478,6 +478,13 @@ func validateDNSRecordContentForTypeWithKnowledge(recordType string, content *st
 			diagnostics.AddError("Invalid DNS record content", fmt.Sprintf("Record type %q requires an IPv6 address, got %q.", normalizedType, trimmedContent))
 			return false
 		}
+		if isDocumentationAddress(addr) {
+			diagnostics.AddError(
+				"Unsupported documentation IP address",
+				fmt.Sprintf("Dynu rejects documentation-only address ranges for live DNS records. Replace %q with a real routable address under your control.", trimmedContent),
+			)
+			return false
+		}
 		return true
 	}
 
@@ -502,6 +509,22 @@ func validateDNSRecordContentForTypeWithKnowledge(recordType string, content *st
 	}
 
 	return true
+}
+
+func isDocumentationAddress(addr netip.Addr) bool {
+	if addr.Is4() {
+		v4 := addr.As4()
+		return (v4[0] == 192 && v4[1] == 0 && v4[2] == 2) ||
+			(v4[0] == 198 && v4[1] == 51 && v4[2] == 100) ||
+			(v4[0] == 203 && v4[1] == 0 && v4[2] == 113)
+	}
+
+	if addr.Is6() {
+		v6 := addr.As16()
+		return v6[0] == 0x20 && v6[1] == 0x01 && v6[2] == 0x0d && v6[3] == 0xb8
+	}
+
+	return false
 }
 
 func resolveDynamicIntent(recordType string, content types.String, dynamic types.Bool, diagnostics *diag.Diagnostics) (bool, bool) {

@@ -26,8 +26,8 @@ func TestParseDNSRecordIDInvalid(t *testing.T) {
 }
 
 func TestValidateDNSRecordContentForType(t *testing.T) {
-	ipv4 := "192.0.2.123"
-	ipv6 := "2001:db8::123"
+	ipv4 := "8.8.8.8"
+	ipv6 := "2606:4700:4700::1111"
 	nonEmpty := "hello"
 	blank := ""
 
@@ -75,7 +75,7 @@ func TestResolveDynamicIntent(t *testing.T) {
 	}
 
 	diags = diag.Diagnostics{}
-	dynamic, ok = resolveDynamicIntent("A", types.StringValue("192.0.2.10"), types.BoolNull(), &diags)
+	dynamic, ok = resolveDynamicIntent("A", types.StringValue("8.8.4.4"), types.BoolNull(), &diags)
 	if !ok || dynamic || diags.HasError() {
 		t.Fatalf("expected static A content to resolve to dynamic=false, got dynamic=%v ok=%v diags=%v", dynamic, ok, diags)
 	}
