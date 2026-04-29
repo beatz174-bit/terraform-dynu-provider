@@ -50,13 +50,15 @@ type rawResponse struct {
 }
 
 type dnsRecordUpsertRequest struct {
-	NodeName   string `json:"nodeName"`
-	RecordType string `json:"recordType"`
-	Content    string `json:"content"`
-	TTL        int64  `json:"ttl"`
-	State      *bool  `json:"state"`
-	Group      string `json:"group"`
-	Host       string `json:"host"`
+	NodeName    string `json:"nodeName"`
+	RecordType  string `json:"recordType"`
+	Content     string `json:"content"`
+	IPv4Address string `json:"ipv4Address"`
+	IPv6Address string `json:"ipv6Address"`
+	TTL         int64  `json:"ttl"`
+	State       *bool  `json:"state"`
+	Group       string `json:"group"`
+	Host        string `json:"host"`
 }
 
 func NewServer() *Server {
@@ -272,7 +274,8 @@ func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request, doma
 		s.writeAPIError(w, APIError{HTTPStatus: http.StatusBadRequest, StatusCode: 400, Type: "Validation Exception", Message: "recordType is required"})
 		return
 	}
-	if req.Content == "" && !strings.EqualFold(req.RecordType, "A") && !strings.EqualFold(req.RecordType, "AAAA") {
+	content := contentFromUpsertRequest(req)
+	if content == "" && !strings.EqualFold(req.RecordType, "A") && !strings.EqualFold(req.RecordType, "AAAA") {
 		s.writeAPIError(w, APIError{HTTPStatus: http.StatusBadRequest, StatusCode: 400, Type: "Validation Exception", Message: "recordType and content are required"})
 		return
 	}
@@ -299,7 +302,7 @@ func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request, doma
 		RecordType: req.RecordType,
 		State:      state,
 		TTL:        ttl,
-		Content:    req.Content,
+		Content:    content,
 		UpdatedOn:  time.Now().UTC().Format(time.RFC3339),
 		Group:      req.Group,
 		Host:       req.Host,
@@ -320,9 +323,11 @@ func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request, doma
 		return
 	}
 
+	content := contentFromUpsertRequest(req)
+
 	record.NodeName = req.NodeName
 	record.RecordType = req.RecordType
-	record.Content = req.Content
+	record.Content = content
 	if req.TTL > 0 {
 		record.TTL = req.TTL
 	}
@@ -336,6 +341,20 @@ func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request, doma
 
 	s.fixture.RecordsByDomain[domainID][idx] = record
 	s.writeRecord(w, record)
+}
+
+func contentFromUpsertRequest(req dnsRecordUpsertRequest) string {
+	switch strings.ToUpper(strings.TrimSpace(req.RecordType)) {
+	case "A":
+		return strings.TrimSpace(req.IPv4Address)
+	case "AAAA":
+		return strings.TrimSpace(req.IPv6Address)
+	case "CNAME":
+		if strings.TrimSpace(req.Host) != "" {
+			return strings.TrimSpace(req.Host)
+		}
+	}
+	return strings.TrimSpace(req.Content)
 }
 
 func (s *Server) handleDeleteRecord(w http.ResponseWriter, domainID int64, recordID int64) {

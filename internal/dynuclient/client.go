@@ -322,18 +322,18 @@ type dnsRecordUpsertPayload struct {
 }
 
 func buildDNSRecordUpsertPayload(recordType string, nodeName string, content *string, ttl int64, state *bool, group string, host string) dnsRecordUpsertPayload {
+	normalizedType := strings.ToUpper(strings.TrimSpace(recordType))
 	normalizedContent := normalizeOptionalContent(content)
 	payload := dnsRecordUpsertPayload{
 		NodeName:   nodeName,
-		RecordType: recordType,
-		Content:    normalizedContent,
+		RecordType: normalizedType,
 		TTL:        ttl,
 		State:      state,
 		Group:      group,
 		Host:       host,
 	}
 
-	switch strings.ToUpper(strings.TrimSpace(recordType)) {
+	switch normalizedType {
 	case "A":
 		if normalizedContent != nil {
 			payload.IPv4Address = *normalizedContent
@@ -346,6 +346,8 @@ func buildDNSRecordUpsertPayload(recordType string, nodeName string, content *st
 		if payload.Host == "" && normalizedContent != nil {
 			payload.Host = *normalizedContent
 		}
+	default:
+		payload.Content = normalizedContent
 	}
 
 	return payload
