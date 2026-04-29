@@ -6,9 +6,9 @@ provider "dynu" {
 }
 
 locals {
-  hostname_a_ipv4    = "codex-a-${var.test_suffix}.${var.dynu_root_domain}"
-  hostname_aaaa_ipv6 = "codex-aaaa-${var.test_suffix}.${var.dynu_root_domain}"
-  hostname_cname     = "codex-cname-${var.test_suffix}.${var.dynu_root_domain}"
+  hostname_a_ipv4       = "codex-a-${var.test_suffix}.${var.dynu_root_domain}"
+  hostname_aaaa_ipv6    = "codex-aaaa-${var.test_suffix}.${var.dynu_root_domain}"
+  hostname_cname        = "codex-cname-${var.test_suffix}.${var.dynu_root_domain}"
   hostname_dynamic_a    = "codex-dynamic-a-${var.test_suffix}.${var.dynu_root_domain}"
   hostname_dynamic_aaaa = "codex-dynamic-aaaa-${var.test_suffix}.${var.dynu_root_domain}"
 }

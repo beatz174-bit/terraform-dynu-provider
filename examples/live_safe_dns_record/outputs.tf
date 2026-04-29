@@ -1,9 +1,9 @@
 output "record_hostnames" {
   description = "Disposable hostnames created for each live-safe DNS scenario."
   value = {
-    a_ipv4     = dynu_dns_record.a_ipv4.hostname
-    aaaa_ipv6  = dynu_dns_record.aaaa_ipv6.hostname
-    cname      = dynu_dns_record.cname.hostname
+    a_ipv4       = dynu_dns_record.a_ipv4.hostname
+    aaaa_ipv6    = dynu_dns_record.aaaa_ipv6.hostname
+    cname        = dynu_dns_record.cname.hostname
     dynamic_a    = dynu_dns_record.dynamic_a.hostname
     dynamic_aaaa = dynu_dns_record.dynamic_aaaa.hostname
   }
@@ -12,9 +12,9 @@ output "record_hostnames" {
 output "record_ids" {
   description = "Dynu record IDs (domain_id/record_id) for each scenario."
   value = {
-    a_ipv4     = dynu_dns_record.a_ipv4.id
-    aaaa_ipv6  = dynu_dns_record.aaaa_ipv6.id
-    cname      = dynu_dns_record.cname.id
+    a_ipv4       = dynu_dns_record.a_ipv4.id
+    aaaa_ipv6    = dynu_dns_record.aaaa_ipv6.id
+    cname        = dynu_dns_record.cname.id
     dynamic_a    = dynu_dns_record.dynamic_a.id
     dynamic_aaaa = dynu_dns_record.dynamic_aaaa.id
   }
