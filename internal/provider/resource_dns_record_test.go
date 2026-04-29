@@ -229,6 +229,24 @@ func TestIsUnsupportedEmptyContentError(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "status 505 generic invalid with period",
+			err: &dynuclient.APIError{
+				StatusCode: 505,
+				Type:       "Validation Exception",
+				Message:    "Invalid.",
+			},
+			want: true,
+		},
+		{
+			name: "status 505 generic invalid without period",
+			err: &dynuclient.APIError{
+				StatusCode: 505,
+				Type:       "Validation Exception",
+				Message:    "Invalid",
+			},
+			want: true,
+		},
+		{
 			name: "status 505 unrelated message",
 			err: &dynuclient.APIError{
 				StatusCode: 505,
@@ -243,6 +261,24 @@ func TestIsUnsupportedEmptyContentError(t *testing.T) {
 				StatusCode: 505,
 				Type:       "Unauthorized",
 				Message:    "Invalid IP address.",
+			},
+			want: false,
+		},
+		{
+			name: "status 500 generic invalid",
+			err: &dynuclient.APIError{
+				StatusCode: 500,
+				Type:       "Validation Exception",
+				Message:    "Invalid.",
+			},
+			want: false,
+		},
+		{
+			name: "status 505 non validation generic invalid",
+			err: &dynuclient.APIError{
+				StatusCode: 505,
+				Type:       "Some Other Exception",
+				Message:    "Invalid.",
 			},
 			want: false,
 		},

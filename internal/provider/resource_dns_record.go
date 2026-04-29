@@ -587,11 +587,12 @@ func isUnsupportedEmptyContentError(err error) bool {
 	if normalizedType != "validation exception" {
 		return false
 	}
-	normalizedMessage := strings.ToLower(strings.TrimSpace(apiErr.Message))
+	normalizedMessage := strings.ToLower(strings.TrimSpace(strings.TrimSuffix(apiErr.Message, ".")))
 	return strings.Contains(normalizedMessage, "content is required") ||
 		strings.Contains(normalizedMessage, "ipv4address is required") ||
 		strings.Contains(normalizedMessage, "ipv6address is required") ||
-		strings.Contains(normalizedMessage, "invalid ip address")
+		strings.Contains(normalizedMessage, "invalid ip address") ||
+		normalizedMessage == "invalid"
 }
 
 func (r *dnsRecordResource) applyDynamicBootstrapFallback(ctx context.Context, domainID int64, req dynuclient.CreateDNSRecordRequest, diagnostics *diag.Diagnostics) (dynuclient.CreateDNSRecordRequest, bool) {
