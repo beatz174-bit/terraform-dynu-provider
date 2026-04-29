@@ -1,7 +1,8 @@
-resource "dynu_dns_record" "txt" {
+resource "dynu_dns_record" "a_location_min_ttl" {
   hostname    = "api.example.com"
-  record_type = "TXT"
-  content     = "managed-by-terraform"
-  ttl         = 300
-  state       = true
+  record_type = "A"
+  content     = "198.51.100.10"
+  ttl         = 90
+  enabled     = false
+  location    = "us"
 }

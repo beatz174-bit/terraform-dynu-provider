@@ -173,6 +173,48 @@ func TestNormalizeDNSRecordUpdateRequestForType(t *testing.T) {
 	}
 }
 
+func TestValidateRecordTTLSeconds(t *testing.T) {
+	cases := []struct {
+		ttl  int64
+		want bool
+	}{
+		{ttl: 0, want: true},
+		{ttl: 89, want: false},
+		{ttl: 90, want: true},
+		{ttl: 1800, want: true},
+	}
+	for _, tc := range cases {
+		diags := diag.Diagnostics{}
+		got := validateRecordTTLSeconds(tc.ttl, &diags)
+		if got != tc.want {
+			t.Fatalf("validateRecordTTLSeconds(%d)=%v, want %v", tc.ttl, got, tc.want)
+		}
+	}
+}
+
+func TestValidateLocationForType(t *testing.T) {
+	diags := diag.Diagnostics{}
+	if !validateLocationForType("A", "us", &diags) || diags.HasError() {
+		t.Fatal("expected location for A to be valid")
+	}
+	diags = diag.Diagnostics{}
+	if validateLocationForType("CNAME", "us", &diags) || !diags.HasError() {
+		t.Fatal("expected location for CNAME to fail")
+	}
+}
+
+func TestLocationForUpdate(t *testing.T) {
+	if got := locationForUpdate("A", types.StringNull(), types.StringValue("us")); got != "us" {
+		t.Fatalf("expected A record update to preserve state location, got %q", got)
+	}
+	if got := locationForUpdate("CNAME", types.StringNull(), types.StringValue("us")); got != "" {
+		t.Fatalf("expected non-A/AAAA type to ignore prior state location when omitted, got %q", got)
+	}
+	if got := locationForUpdate("TXT", types.StringValue("eu"), types.StringValue("us")); got != "eu" {
+		t.Fatalf("expected explicit plan location to be returned as-is, got %q", got)
+	}
+}
+
 func TestInferDynamicIntentFromState(t *testing.T) {
 	tests := []struct {
 		name       string

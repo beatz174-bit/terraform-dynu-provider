@@ -163,9 +163,10 @@ Arguments:
 - `dynamic` (Bool, optional/computed)
   - Explicit dynamic-mode toggle for `A`/`AAAA`. Existing omitted `content` behavior remains backward compatible.
 - `ttl` (Number, optional)
-- `state` (Bool, optional)
+- `enabled` (Bool, optional, defaults to `true`)
 - `group` (String, optional)
 - `host` (String, optional)
+- `location` (String, optional; A/AAAA only)
 - `node_name` (String, optional)
 
 Attributes:
@@ -180,10 +181,11 @@ Example:
 ```hcl
 resource "dynu_dns_record" "txt" {
   hostname    = "api.example.com"
-  record_type = "TXT"
-  content     = "hello-from-terraform"
-  ttl         = 300
-  state       = true
+  record_type = "A"
+  content     = "198.51.100.10"
+  ttl         = 90
+  enabled     = false
+  location    = "us"
 }
 
 resource "dynu_dns_record" "dynamic_a" {
@@ -244,7 +246,7 @@ Attributes:
 - `domain_name` (String)
 - `records` (List(Object)) with:
   - `id`, `domain_id`, `domain_name`, `node_name`, `hostname`, `record_type`
-  - `ttl`, `state`, `content`, `updated_on`, `group`, `host`
+  - `ttl`, `state`, `content`, `updated_on`, `group`, `host`, `location`
 
 Example:
 

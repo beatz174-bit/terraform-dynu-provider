@@ -106,6 +106,7 @@ type DNSRecord struct {
 	UpdatedOn  string `json:"updatedOn"`
 	Group      string `json:"group"`
 	Host       string `json:"host"`
+	Location   string `json:"location"`
 }
 
 type CreateDNSRecordRequest struct {
@@ -116,6 +117,7 @@ type CreateDNSRecordRequest struct {
 	State      *bool   `json:"state,omitempty"`
 	Group      string  `json:"group,omitempty"`
 	Host       string  `json:"host,omitempty"`
+	Location   string  `json:"location,omitempty"`
 }
 
 type UpdateDNSRecordRequest struct {
@@ -126,6 +128,7 @@ type UpdateDNSRecordRequest struct {
 	State      *bool   `json:"state,omitempty"`
 	Group      string  `json:"group,omitempty"`
 	Host       string  `json:"host,omitempty"`
+	Location   string  `json:"location,omitempty"`
 }
 
 type listDomainsResponse struct {
@@ -207,7 +210,7 @@ func (c *Client) GetDNSRecord(ctx context.Context, domainID int64, recordID int6
 
 func (c *Client) CreateDNSRecord(ctx context.Context, domainID int64, req CreateDNSRecordRequest) (*DNSRecord, error) {
 	var resp getDNSRecordResponse
-	if err := c.doRequest(ctx, http.MethodPost, fmt.Sprintf("/dns/%d/record", domainID), buildDNSRecordUpsertPayload(req.RecordType, req.NodeName, req.Content, req.TTL, req.State, req.Group, req.Host), &resp); err != nil {
+	if err := c.doRequest(ctx, http.MethodPost, fmt.Sprintf("/dns/%d/record", domainID), buildDNSRecordUpsertPayload(req.RecordType, req.NodeName, req.Content, req.TTL, req.State, req.Group, req.Host, req.Location), &resp); err != nil {
 		return nil, err
 	}
 	normalizeDNSRecord(&resp.DNSRecord)
@@ -216,7 +219,7 @@ func (c *Client) CreateDNSRecord(ctx context.Context, domainID int64, req Create
 
 func (c *Client) UpdateDNSRecord(ctx context.Context, domainID int64, recordID int64, req UpdateDNSRecordRequest) (*DNSRecord, error) {
 	var resp getDNSRecordResponse
-	if err := c.doRequest(ctx, http.MethodPost, fmt.Sprintf("/dns/%d/record/%d", domainID, recordID), buildDNSRecordUpsertPayload(req.RecordType, req.NodeName, req.Content, req.TTL, req.State, req.Group, req.Host), &resp); err != nil {
+	if err := c.doRequest(ctx, http.MethodPost, fmt.Sprintf("/dns/%d/record/%d", domainID, recordID), buildDNSRecordUpsertPayload(req.RecordType, req.NodeName, req.Content, req.TTL, req.State, req.Group, req.Host, req.Location), &resp); err != nil {
 		return nil, err
 	}
 	normalizeDNSRecord(&resp.DNSRecord)
@@ -319,9 +322,10 @@ type dnsRecordUpsertPayload struct {
 	State       *bool   `json:"state,omitempty"`
 	Group       string  `json:"group,omitempty"`
 	Host        string  `json:"host,omitempty"`
+	Location    string  `json:"location,omitempty"`
 }
 
-func buildDNSRecordUpsertPayload(recordType string, nodeName string, content *string, ttl int64, state *bool, group string, host string) dnsRecordUpsertPayload {
+func buildDNSRecordUpsertPayload(recordType string, nodeName string, content *string, ttl int64, state *bool, group string, host string, location string) dnsRecordUpsertPayload {
 	normalizedType := strings.ToUpper(strings.TrimSpace(recordType))
 	normalizedContent := normalizeOptionalContent(content)
 	payload := dnsRecordUpsertPayload{
@@ -331,6 +335,7 @@ func buildDNSRecordUpsertPayload(recordType string, nodeName string, content *st
 		State:      state,
 		Group:      group,
 		Host:       host,
+		Location:   location,
 	}
 
 	switch normalizedType {
@@ -346,8 +351,10 @@ func buildDNSRecordUpsertPayload(recordType string, nodeName string, content *st
 		if normalizedContent != nil {
 			payload.Host = *normalizedContent
 		}
+		payload.Location = ""
 	default:
 		payload.Content = normalizedContent
+		payload.Location = ""
 	}
 
 	return payload

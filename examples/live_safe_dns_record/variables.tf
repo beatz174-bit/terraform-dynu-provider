@@ -60,7 +60,13 @@ variable "test_cname_target" {
 }
 
 variable "test_ttl" {
-  description = "TTL in seconds for disposable DNS records."
+  description = "TTL in seconds for disposable DNS records. Must be 0 (provider/API default) or >= 90."
   type        = number
   default     = 300
+}
+
+variable "test_location" {
+  description = "Optional Dynu location hint for A/AAAA records."
+  type        = string
+  default     = "us"
 }
