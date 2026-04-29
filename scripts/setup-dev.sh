@@ -273,10 +273,10 @@ validate_terraform() {
   if [[ -z "$TERRAFORM_PATH" ]]; then
     if (( STRICT_MODE == 1 )); then
       error "terraform not found in PATH (required in --strict mode)"
+      bad=1
     else
       warn "terraform not found in PATH (allowed only because --no-strict was set)"
     fi
-    bad=1
     return "$bad"
   fi
 
