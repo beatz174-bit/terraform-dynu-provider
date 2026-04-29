@@ -14,6 +14,28 @@ for cmd in bash git; do
   have "$cmd" || die "$cmd is required"
 done
 
+install_terraform() {
+  if have terraform; then
+    log "terraform detected: $(command -v terraform)"
+    return 0
+  fi
+
+  have curl || die "curl is required to install terraform"
+  have unzip || die "unzip is required to install terraform"
+
+  local tf_version tf_zip tf_url tf_install_dir tf_tmp_dir
+  tf_version="${TERRAFORM_VERSION:-1.11.4}"
+  tf_zip="terraform_${tf_version}_linux_amd64.zip"
+  tf_url="https://releases.hashicorp.com/terraform/${tf_version}/${tf_zip}"
+  tf_install_dir="$(pwd)/.codex/bin"
+  tf_tmp_dir="$(pwd)/.codex/tmp"
+
+  log "terraform not found; installing v${tf_version} into ${tf_install_dir}"
+  curl -fsSL "$tf_url" -o "${tf_tmp_dir}/${tf_zip}"
+  unzip -qo "${tf_tmp_dir}/${tf_zip}" -d "$tf_install_dir"
+  chmod +x "${tf_install_dir}/terraform"
+}
+
 validate_goproxy() {
   local value="$1"
   local part trimmed
@@ -46,12 +68,16 @@ ensure_dir .codex/bin
 ensure_dir .codex/cache
 ensure_dir .codex/tmp
 ensure_dir .codex/logs
+export PATH="$(pwd)/.codex/bin:$PATH"
 
 cat > .codex/env <<'ENVEOF'
 export CI=1
 export TERM=xterm-256color
 export GIT_PAGER=cat
+export PATH="$(pwd)/.codex/bin:$PATH"
 ENVEOF
+
+install_terraform
 
 if have python3; then
   log "python3 detected"
