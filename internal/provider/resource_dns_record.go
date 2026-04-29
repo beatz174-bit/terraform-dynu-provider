@@ -256,7 +256,7 @@ func (r *dnsRecordResource) Update(ctx context.Context, req resource.UpdateReque
 		State:      boolPointerFromOptional(preferKnownBool(plan.Enabled, state.Enabled)),
 		Group:      stringFromOptional(preferKnownString(plan.Group, state.Group)),
 		Host:       stringFromOptional(preferKnownString(plan.Host, state.Host)),
-		Location:   stringFromOptional(preferKnownString(plan.Location, state.Location)),
+		Location:   locationForUpdate(recordType, plan.Location, state.Location),
 	}
 	updateReq = normalizeDNSRecordUpdateRequestForType(updateReq)
 	if !validateDNSRecordContentForType(updateReq.RecordType, updateReq.Content, dynamicIntent, &resp.Diagnostics) {
@@ -600,6 +600,14 @@ func validateLocationForType(recordType string, location string, diagnostics *di
 		return false
 	}
 	return true
+}
+
+func locationForUpdate(recordType string, planLocation types.String, stateLocation types.String) string {
+	normalizedType := strings.ToUpper(strings.TrimSpace(recordType))
+	if normalizedType != "A" && normalizedType != "AAAA" {
+		return stringFromOptional(planLocation)
+	}
+	return stringFromOptional(preferKnownString(planLocation, stateLocation))
 }
 
 func resolveDynamicIntent(recordType string, content types.String, dynamic types.Bool, diagnostics *diag.Diagnostics) (bool, bool) {
