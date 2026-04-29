@@ -10,6 +10,7 @@ cd_repo_root
 log "Refreshing Codex environment and running repository checks"
 
 "$SCRIPT_DIR/setup.sh"
+export PATH="$(pwd)/.codex/bin:$PATH"
 
 if [[ -x scripts/check.sh ]]; then
   ./scripts/check.sh
