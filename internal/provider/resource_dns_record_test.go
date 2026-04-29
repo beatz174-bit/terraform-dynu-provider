@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -76,6 +77,59 @@ func TestResolveDynamicIntent(t *testing.T) {
 	dynamic, ok = resolveDynamicIntent("A", types.StringValue("192.0.2.10"), types.BoolNull(), &diags)
 	if !ok || dynamic || diags.HasError() {
 		t.Fatalf("expected static A content to resolve to dynamic=false, got dynamic=%v ok=%v diags=%v", dynamic, ok, diags)
+	}
+}
+
+func TestValidateDNSRecordContentForTypeWithKnowledge(t *testing.T) {
+	nonEmpty := "example.com"
+	blank := ""
+
+	tests := []struct {
+		name         string
+		recordType   string
+		content      *string
+		contentKnown bool
+		dynamic      bool
+		wantValid    bool
+		wantMessage  string
+	}{
+		{name: "CNAME unknown content is allowed during validate", recordType: "CNAME", content: nil, contentKnown: false, wantValid: true},
+		{name: "CNAME null content errors", recordType: "CNAME", content: nil, contentKnown: true, wantValid: false, wantMessage: "Missing required content"},
+		{name: "CNAME empty content errors", recordType: "CNAME", content: &blank, contentKnown: true, wantValid: false, wantMessage: "Missing required content"},
+		{name: "CNAME known content passes", recordType: "CNAME", content: &nonEmpty, contentKnown: true, wantValid: true},
+		{name: "CNAME dynamic true errors", recordType: "CNAME", content: nil, contentKnown: false, dynamic: true, wantValid: false, wantMessage: "Dynamic mode is only supported"},
+		{name: "A dynamic omitted content passes", recordType: "A", content: nil, contentKnown: true, dynamic: true, wantValid: true},
+		{name: "AAAA dynamic omitted content passes", recordType: "AAAA", content: nil, contentKnown: true, dynamic: true, wantValid: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			diags := diag.Diagnostics{}
+			got := validateDNSRecordContentForTypeWithKnowledge(tc.recordType, tc.content, tc.contentKnown, tc.dynamic, &diags)
+			if got != tc.wantValid {
+				t.Fatalf("validateDNSRecordContentForTypeWithKnowledge()=%v, want %v", got, tc.wantValid)
+			}
+			if tc.wantValid && diags.HasError() {
+				t.Fatalf("expected no diagnostics, got %#v", diags)
+			}
+			if !tc.wantValid {
+				if !diags.HasError() {
+					t.Fatal("expected diagnostics but got none")
+				}
+				if tc.wantMessage != "" && diags[0].Summary() != "" && !strings.Contains(diags[0].Summary(), tc.wantMessage) {
+					t.Fatalf("expected first diagnostic summary to contain %q, got %q", tc.wantMessage, diags[0].Summary())
+				}
+			}
+		})
+	}
+}
+
+func TestStringPointerFromOptionalContentForValidation(t *testing.T) {
+	if content, known := stringPointerFromOptionalContentForValidation(types.StringUnknown()); known || content != nil {
+		t.Fatalf("expected unknown content to be unknown with nil pointer, got known=%v content=%v", known, content)
+	}
+	if content, known := stringPointerFromOptionalContentForValidation(types.StringNull()); !known || content != nil {
+		t.Fatalf("expected null content to be known with nil pointer, got known=%v content=%v", known, content)
 	}
 }
 
