@@ -189,6 +189,151 @@ func TestClientCreateDNSRecordSendsIPv4AddressForARecord(t *testing.T) {
 	if captured["ipv4Address"] != "167.179.167.166" {
 		t.Fatalf("expected ipv4Address in payload, got %#v", captured)
 	}
+	if _, ok := captured["content"]; ok {
+		t.Fatalf("expected content to be omitted for A record, got %#v", captured["content"])
+	}
+	if _, ok := captured["ipv6Address"]; ok {
+		t.Fatalf("expected ipv6Address to be omitted for A record, got %#v", captured["ipv6Address"])
+	}
+}
+
+func TestClientUpdateDNSRecordSendsIPv6AddressForAAAARecord(t *testing.T) {
+	var captured map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != "/dns/1001/record/2002" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
+			t.Fatalf("failed to decode payload: %v", err)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"statusCode": 200,
+			"id":         2002,
+			"domainId":   1001,
+			"domainName": "example.com",
+			"nodeName":   "www",
+			"hostname":   "www.example.com",
+			"recordType": "AAAA",
+			"content":    "2001:db8::123",
+			"ttl":        90,
+			"state":      true,
+		})
+	}))
+	defer server.Close()
+
+	client := dynuclient.New("test-key", dynuclient.WithBaseURL(server.URL), dynuclient.WithHTTPClient(server.Client()))
+	_, err := client.UpdateDNSRecord(context.Background(), 1001, 2002, dynuclient.UpdateDNSRecordRequest{
+		NodeName:   "www",
+		RecordType: "AAAA",
+		Content:    stringPointer("2001:db8::123"),
+		TTL:        90,
+	})
+	if err != nil {
+		t.Fatalf("UpdateDNSRecord() error = %v", err)
+	}
+
+	if captured["recordType"] != "AAAA" {
+		t.Fatalf("expected recordType AAAA, got %#v", captured["recordType"])
+	}
+	if captured["ipv6Address"] != "2001:db8::123" {
+		t.Fatalf("expected ipv6Address in payload, got %#v", captured)
+	}
+	if _, ok := captured["content"]; ok {
+		t.Fatalf("expected content to be omitted for AAAA record, got %#v", captured["content"])
+	}
+	if _, ok := captured["ipv4Address"]; ok {
+		t.Fatalf("expected ipv4Address to be omitted for AAAA record, got %#v", captured["ipv4Address"])
+	}
+}
+
+func TestClientCreateDNSRecordSendsHostForCNAMERecord(t *testing.T) {
+	var captured map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/dns/1001/record" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
+			t.Fatalf("failed to decode payload: %v", err)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"statusCode": 200,
+			"id":         11,
+			"domainId":   1001,
+			"domainName": "example.com",
+			"nodeName":   "alias",
+			"hostname":   "alias.example.com",
+			"recordType": "CNAME",
+			"content":    "target.example.com",
+			"host":       "target.example.com",
+			"ttl":        90,
+			"state":      true,
+		})
+	}))
+	defer server.Close()
+
+	client := dynuclient.New("test-key", dynuclient.WithBaseURL(server.URL), dynuclient.WithHTTPClient(server.Client()))
+	_, err := client.CreateDNSRecord(context.Background(), 1001, dynuclient.CreateDNSRecordRequest{
+		NodeName:   "alias",
+		RecordType: "CNAME",
+		Content:    stringPointer("target.example.com"),
+		TTL:        90,
+	})
+	if err != nil {
+		t.Fatalf("CreateDNSRecord() error = %v", err)
+	}
+
+	if captured["host"] != "target.example.com" {
+		t.Fatalf("expected host in payload, got %#v", captured)
+	}
+	if _, ok := captured["content"]; ok {
+		t.Fatalf("expected content to be omitted for CNAME record, got %#v", captured["content"])
+	}
+}
+
+func TestClientCreateDNSRecordSendsContentForTXTRecord(t *testing.T) {
+	var captured map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/dns/1001/record" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
+			t.Fatalf("failed to decode payload: %v", err)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"statusCode": 200,
+			"id":         12,
+			"domainId":   1001,
+			"domainName": "example.com",
+			"nodeName":   "txt",
+			"hostname":   "txt.example.com",
+			"recordType": "TXT",
+			"content":    "hello",
+			"ttl":        90,
+			"state":      true,
+		})
+	}))
+	defer server.Close()
+
+	client := dynuclient.New("test-key", dynuclient.WithBaseURL(server.URL), dynuclient.WithHTTPClient(server.Client()))
+	_, err := client.CreateDNSRecord(context.Background(), 1001, dynuclient.CreateDNSRecordRequest{
+		NodeName:   "txt",
+		RecordType: "TXT",
+		Content:    stringPointer("hello"),
+		TTL:        90,
+	})
+	if err != nil {
+		t.Fatalf("CreateDNSRecord() error = %v", err)
+	}
+
+	if captured["content"] != "hello" {
+		t.Fatalf("expected content in payload, got %#v", captured)
+	}
+	if _, ok := captured["ipv4Address"]; ok {
+		t.Fatalf("expected ipv4Address to be omitted for TXT record, got %#v", captured["ipv4Address"])
+	}
+	if _, ok := captured["ipv6Address"]; ok {
+		t.Fatalf("expected ipv6Address to be omitted for TXT record, got %#v", captured["ipv6Address"])
+	}
 }
 
 func TestClientCreateDNSRecordNormalizesZoneStyleContent(t *testing.T) {
