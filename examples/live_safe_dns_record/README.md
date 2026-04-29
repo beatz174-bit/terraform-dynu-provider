@@ -32,7 +32,7 @@ Edit `terraform.tfvars` and set at least:
 - `dynu_root_domain`
 - `test_suffix` (use a unique value per run)
 
-Optional overrides include `test_ipv4`, `test_ipv6`, and `test_cname_target`.
+Optional overrides include `test_ipv4`, `test_ipv6`, and `test_cname_target`. Use real routable IPs for `test_ipv4`/`test_ipv6`; Dynu rejects documentation ranges such as `192.0.2.0/24` and `2001:db8::/32`.
 
 ## Run
 

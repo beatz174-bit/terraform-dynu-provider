@@ -195,7 +195,7 @@ func TestIntegrationResourceDNSRecordDynamicAStateStableAndTransitionToStatic(t 
 	}
 
 	updatePlan := state
-	updatePlan.Content = types.StringValue("192.0.2.42")
+	updatePlan.Content = types.StringValue("1.1.1.1")
 	updatePlan.Dynamic = types.BoolValue(false)
 
 	plan = tfsdk.Plan{Schema: schemaResp.Schema}
@@ -214,7 +214,7 @@ func TestIntegrationResourceDNSRecordDynamicAStateStableAndTransitionToStatic(t 
 	if state.Dynamic.ValueBool() {
 		t.Fatalf("expected static A after setting content")
 	}
-	if state.Content.ValueString() != "192.0.2.42" {
+	if state.Content.ValueString() != "1.1.1.1" {
 		t.Fatalf("expected static content after update, got %q", state.Content.ValueString())
 	}
 }

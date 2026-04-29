@@ -8,7 +8,7 @@ dynu_root_domain = "example.com"
 # Set to a unique value per run so records are clearly disposable.
 test_suffix = "manual"
 
-# Safe documentation values for live test scenarios.
+# Replace with real routable values for your environment (Dynu rejects documentation-only ranges).
 test_ipv4         = "192.0.2.123"
 test_ipv6         = "2001:db8::123"
 test_cname_target = "example.com"
