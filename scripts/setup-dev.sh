@@ -5,7 +5,7 @@ MIN_GO_VERSION="1.23.0"
 MIN_TERRAFORM_VERSION="1.5.0"
 
 FIX_MODE=0
-STRICT_MODE=0
+STRICT_MODE=1
 
 log() {
   echo "[setup-dev] $*"
@@ -21,11 +21,11 @@ error() {
 
 usage() {
   cat <<USAGE
-Usage: ./scripts/setup-dev.sh [--fix] [--strict] [--help]
+Usage: ./scripts/setup-dev.sh [--fix] [--no-strict] [--help]
 
 Modes:
   --fix     Validate and attempt safe remediation via already-installed version managers.
-  --strict  Treat missing Terraform as an error.
+  --no-strict  Allow missing Terraform (not recommended; legacy compatibility mode).
   --help    Show this help text.
 USAGE
 }
@@ -35,8 +35,8 @@ while [[ $# -gt 0 ]]; do
     --fix)
       FIX_MODE=1
       ;;
-    --strict)
-      STRICT_MODE=1
+    --no-strict)
+      STRICT_MODE=0
       ;;
     --help|-h)
       usage
@@ -275,7 +275,7 @@ validate_terraform() {
       error "terraform not found in PATH (required in --strict mode)"
       bad=1
     else
-      warn "terraform not found in PATH (required for validate/acceptance workflows)"
+      warn "terraform not found in PATH (allowed only because --no-strict was set)"
     fi
     return "$bad"
   fi
