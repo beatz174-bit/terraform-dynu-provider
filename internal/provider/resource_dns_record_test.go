@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dynu/terraform-provider-dynu/internal/dynuclient"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -187,6 +188,59 @@ func TestInferDynamicIntentFromState(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := inferDynamicIntentFromState(tc.recordType, tc.content, tc.dynamic); got != tc.want {
 				t.Fatalf("inferDynamicIntentFromState()=%v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestIsUnsupportedEmptyContentError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "status 400 content required",
+			err: &dynuclient.APIError{
+				StatusCode: 400,
+				Type:       "Validation Exception",
+				Message:    "content is required",
+			},
+			want: true,
+		},
+		{
+			name: "status 505 invalid ip address",
+			err: &dynuclient.APIError{
+				StatusCode: 505,
+				Type:       "Validation Exception",
+				Message:    "Invalid IP address.",
+			},
+			want: true,
+		},
+		{
+			name: "status 505 unrelated message",
+			err: &dynuclient.APIError{
+				StatusCode: 505,
+				Type:       "Validation Exception",
+				Message:    "Some other validation failure",
+			},
+			want: false,
+		},
+		{
+			name: "non validation exception",
+			err: &dynuclient.APIError{
+				StatusCode: 505,
+				Type:       "Unauthorized",
+				Message:    "Invalid IP address.",
+			},
+			want: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isUnsupportedEmptyContentError(tc.err); got != tc.want {
+				t.Fatalf("isUnsupportedEmptyContentError()=%v, want %v", got, tc.want)
 			}
 		})
 	}
