@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ -x codex/setup.sh ]]; then
+  ./codex/setup.sh >/dev/null
+fi
+
+if [[ -d .codex/bin ]]; then
+  export PATH="$(pwd)/.codex/bin:$PATH"
+fi
+
 echo "[check] verifying gofmt"
 files="$(git ls-files '*.go')"
 if [[ -n "${files}" ]]; then
