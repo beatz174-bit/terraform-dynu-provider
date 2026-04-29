@@ -216,7 +216,7 @@ func (c *Client) CreateDNSRecord(ctx context.Context, domainID int64, req Create
 
 func (c *Client) UpdateDNSRecord(ctx context.Context, domainID int64, recordID int64, req UpdateDNSRecordRequest) (*DNSRecord, error) {
 	var resp getDNSRecordResponse
-	if err := c.doRequest(ctx, http.MethodPut, fmt.Sprintf("/dns/%d/record/%d", domainID, recordID), buildDNSRecordUpsertPayload(req.RecordType, req.NodeName, req.Content, req.TTL, req.State, req.Group, req.Host), &resp); err != nil {
+	if err := c.doRequest(ctx, http.MethodPost, fmt.Sprintf("/dns/%d/record/%d", domainID, recordID), buildDNSRecordUpsertPayload(req.RecordType, req.NodeName, req.Content, req.TTL, req.State, req.Group, req.Host), &resp); err != nil {
 		return nil, err
 	}
 	normalizeDNSRecord(&resp.DNSRecord)

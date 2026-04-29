@@ -241,7 +241,7 @@ func (s *Server) serveRecordRoutes(w http.ResponseWriter, r *http.Request, segme
 		case http.MethodGet:
 			s.handleGetRecord(w, domainID, recordID)
 			return
-		case http.MethodPut:
+		case http.MethodPut, http.MethodPost:
 			s.handleUpdateRecord(w, r, domainID, recordID)
 			return
 		case http.MethodDelete:

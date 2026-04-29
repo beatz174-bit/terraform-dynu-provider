@@ -200,7 +200,7 @@ func TestClientCreateDNSRecordSendsIPv4AddressForARecord(t *testing.T) {
 func TestClientUpdateDNSRecordSendsIPv6AddressForAAAARecord(t *testing.T) {
 	var captured map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut || r.URL.Path != "/dns/1001/record/2002" {
+		if r.Method != http.MethodPost || r.URL.Path != "/dns/1001/record/2002" {
 			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
 		if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
