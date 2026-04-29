@@ -539,7 +539,10 @@ func normalizeRecordContentForState(recordType string, content string, dynamicIn
 
 func isUnsupportedEmptyContentError(err error) bool {
 	var apiErr *dynuclient.APIError
-	if !errors.As(err, &apiErr) || apiErr.StatusCode != 400 {
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	if apiErr.StatusCode != 400 && apiErr.StatusCode != 505 {
 		return false
 	}
 	normalizedType := strings.ToLower(strings.TrimSpace(apiErr.Type))
