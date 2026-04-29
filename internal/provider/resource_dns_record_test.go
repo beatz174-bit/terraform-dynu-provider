@@ -90,3 +90,50 @@ func TestNormalizeRecordContentForState(t *testing.T) {
 		t.Fatalf("expected dynamic content to remain null, got %q", got.ValueString())
 	}
 }
+
+func TestInferDynamicIntentFromState(t *testing.T) {
+	tests := []struct {
+		name       string
+		recordType types.String
+		content    types.String
+		dynamic    types.Bool
+		want       bool
+	}{
+		{
+			name:       "explicit dynamic false wins",
+			recordType: types.StringValue("A"),
+			content:    types.StringNull(),
+			dynamic:    types.BoolValue(false),
+			want:       false,
+		},
+		{
+			name:       "legacy A null content treated dynamic",
+			recordType: types.StringValue("A"),
+			content:    types.StringNull(),
+			dynamic:    types.BoolNull(),
+			want:       true,
+		},
+		{
+			name:       "legacy AAAA unknown content treated dynamic",
+			recordType: types.StringValue("AAAA"),
+			content:    types.StringUnknown(),
+			dynamic:    types.BoolNull(),
+			want:       true,
+		},
+		{
+			name:       "legacy non-A not dynamic",
+			recordType: types.StringValue("TXT"),
+			content:    types.StringNull(),
+			dynamic:    types.BoolNull(),
+			want:       false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := inferDynamicIntentFromState(tc.recordType, tc.content, tc.dynamic); got != tc.want {
+				t.Fatalf("inferDynamicIntentFromState()=%v, want %v", got, tc.want)
+			}
+		})
+	}
+}

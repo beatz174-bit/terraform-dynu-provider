@@ -190,10 +190,7 @@ func (r *dnsRecordResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 
-	dynamicIntent := false
-	if !state.Dynamic.IsNull() && !state.Dynamic.IsUnknown() {
-		dynamicIntent = state.Dynamic.ValueBool()
-	}
+	dynamicIntent := inferDynamicIntentFromState(state.RecordType, state.Content, state.Dynamic)
 	nextState := mapDNSRecordToState(*record, dynamicIntent)
 	nextState.ID = state.ID
 	resp.Diagnostics.Append(resp.State.Set(ctx, &nextState)...)
@@ -483,6 +480,19 @@ func resolveDynamicIntent(recordType string, content types.String, dynamic types
 		return true, true
 	}
 	return true, true
+}
+
+func inferDynamicIntentFromState(recordType types.String, content types.String, dynamic types.Bool) bool {
+	if !dynamic.IsNull() && !dynamic.IsUnknown() {
+		return dynamic.ValueBool()
+	}
+
+	normalizedType := strings.ToUpper(strings.TrimSpace(recordType.ValueString()))
+	if normalizedType != "A" && normalizedType != "AAAA" {
+		return false
+	}
+
+	return content.IsNull() || (content.IsUnknown())
 }
 
 func normalizeRecordContentForState(recordType string, content string, dynamicIntent bool) types.String {
