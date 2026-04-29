@@ -234,13 +234,13 @@ func (r *dnsRecordResource) Update(ctx context.Context, req resource.UpdateReque
 	}
 
 	updateReq := dynuclient.UpdateDNSRecordRequest{
-		NodeName:   recordNodeName(plan.NodeName, plan.Hostname, domainName),
+		NodeName:   recordNodeName(preferKnownString(plan.NodeName, state.NodeName), plan.Hostname, domainName),
 		RecordType: recordType,
 		Content:    stringPointerFromOptionalContent(plan.Content),
-		TTL:        int64FromOptional(plan.TTL),
-		State:      boolPointerFromOptional(plan.State),
-		Group:      stringFromOptional(plan.Group),
-		Host:       stringFromOptional(plan.Host),
+		TTL:        int64FromOptional(preferKnownInt64(plan.TTL, state.TTL)),
+		State:      boolPointerFromOptional(preferKnownBool(plan.State, state.State)),
+		Group:      stringFromOptional(preferKnownString(plan.Group, state.Group)),
+		Host:       stringFromOptional(preferKnownString(plan.Host, state.Host)),
 	}
 	if !validateDNSRecordContentForType(updateReq.RecordType, updateReq.Content, dynamicIntent, &resp.Diagnostics) {
 		return
@@ -388,6 +388,36 @@ func stringFromOptional(value types.String) string {
 		return ""
 	}
 	return strings.TrimSpace(value.ValueString())
+}
+
+func preferKnownString(planValue types.String, stateValue types.String) types.String {
+	if !planValue.IsNull() && !planValue.IsUnknown() {
+		return planValue
+	}
+	if !stateValue.IsNull() && !stateValue.IsUnknown() {
+		return stateValue
+	}
+	return planValue
+}
+
+func preferKnownInt64(planValue types.Int64, stateValue types.Int64) types.Int64 {
+	if !planValue.IsNull() && !planValue.IsUnknown() {
+		return planValue
+	}
+	if !stateValue.IsNull() && !stateValue.IsUnknown() {
+		return stateValue
+	}
+	return planValue
+}
+
+func preferKnownBool(planValue types.Bool, stateValue types.Bool) types.Bool {
+	if !planValue.IsNull() && !planValue.IsUnknown() {
+		return planValue
+	}
+	if !stateValue.IsNull() && !stateValue.IsUnknown() {
+		return stateValue
+	}
+	return planValue
 }
 
 func stringPointerFromOptionalContent(value types.String) *string {

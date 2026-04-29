@@ -232,13 +232,13 @@ func TestIntegrationResourceDNSRecordUpdateUsesStateIDWhenPlanIDUnknown(t *testi
 
 	createPlan := dnsRecordResourceModel{
 		Hostname:   types.StringValue("api.a.example.com"),
-		RecordType: types.StringValue("A"),
-		Content:    types.StringValue("192.0.2.123"),
+		RecordType: types.StringValue("TXT"),
+		Content:    types.StringValue("v=one"),
 		TTL:        types.Int64Value(60),
 		State:      types.BoolValue(true),
-		Group:      types.StringValue("test"),
-		Host:       types.StringNull(),
-		NodeName:   types.StringNull(),
+		Group:      types.StringValue("test-group"),
+		Host:       types.StringValue("test-host"),
+		NodeName:   types.StringValue("test-node"),
 	}
 
 	plan := tfsdk.Plan{Schema: schemaResp.Schema}
@@ -266,7 +266,7 @@ func TestIntegrationResourceDNSRecordUpdateUsesStateIDWhenPlanIDUnknown(t *testi
 	updatePlan.Host = types.StringUnknown()
 	updatePlan.NodeName = types.StringUnknown()
 	updatePlan.UpdatedOn = types.StringUnknown()
-	updatePlan.Content = types.StringValue("192.0.3.123")
+	updatePlan.Content = types.StringValue("v=two")
 
 	plan = tfsdk.Plan{Schema: schemaResp.Schema}
 	if diags := plan.Set(ctx, &updatePlan); diags.HasError() {
@@ -288,8 +288,17 @@ func TestIntegrationResourceDNSRecordUpdateUsesStateIDWhenPlanIDUnknown(t *testi
 	if state.ID.IsNull() || state.ID.IsUnknown() {
 		t.Fatalf("expected ID to remain known after update")
 	}
-	if state.Content.ValueString() != "192.0.3.123" {
+	if state.Content.ValueString() != "v=two" {
 		t.Fatalf("expected updated content, got %q", state.Content.ValueString())
+	}
+	if state.Group.ValueString() != "test-group" {
+		t.Fatalf("expected group preserved from state, got %q", state.Group.ValueString())
+	}
+	if state.Host.ValueString() != "test-host" {
+		t.Fatalf("expected host preserved from state, got %q", state.Host.ValueString())
+	}
+	if state.NodeName.ValueString() != "test-node" {
+		t.Fatalf("expected node_name preserved from state, got %q", state.NodeName.ValueString())
 	}
 }
 
