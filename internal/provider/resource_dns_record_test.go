@@ -28,6 +28,11 @@ func TestParseDNSRecordIDInvalid(t *testing.T) {
 func TestValidateDNSRecordContentForType(t *testing.T) {
 	ipv4 := "8.8.8.8"
 	ipv6 := "2606:4700:4700::1111"
+	docIPv4A := "192.0.2.123"
+	docIPv4B := "198.51.100.123"
+	docIPv4C := "203.0.113.123"
+	docIPv6 := "2001:db8::123"
+	nonIP := "not-an-ip"
 	nonEmpty := "hello"
 	blank := ""
 
@@ -39,10 +44,16 @@ func TestValidateDNSRecordContentForType(t *testing.T) {
 		wantValid  bool
 	}{
 		{name: "A accepts static ipv4", recordType: "A", content: &ipv4, wantValid: true},
+		{name: "A accepts documentation ipv4 192.0.2.0/24", recordType: "A", content: &docIPv4A, wantValid: true},
+		{name: "A accepts documentation ipv4 198.51.100.0/24", recordType: "A", content: &docIPv4B, wantValid: true},
+		{name: "A accepts documentation ipv4 203.0.113.0/24", recordType: "A", content: &docIPv4C, wantValid: true},
+		{name: "A rejects non-ip", recordType: "A", content: &nonIP, wantValid: false},
 		{name: "A rejects ipv6", recordType: "A", content: &ipv6, wantValid: false},
 		{name: "A accepts dynamic nil", recordType: "A", content: nil, dynamic: true, wantValid: true},
 		{name: "A accepts dynamic blank", recordType: "A", content: &blank, dynamic: true, wantValid: true},
 		{name: "AAAA accepts static ipv6", recordType: "AAAA", content: &ipv6, wantValid: true},
+		{name: "AAAA accepts documentation ipv6 2001:db8::/32", recordType: "AAAA", content: &docIPv6, wantValid: true},
+		{name: "AAAA rejects non-ip", recordType: "AAAA", content: &nonIP, wantValid: false},
 		{name: "AAAA rejects ipv4", recordType: "AAAA", content: &ipv4, wantValid: false},
 		{name: "AAAA accepts dynamic nil", recordType: "AAAA", content: nil, dynamic: true, wantValid: true},
 		{name: "TXT requires content", recordType: "TXT", content: nil, wantValid: false},
