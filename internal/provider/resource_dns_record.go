@@ -198,18 +198,26 @@ func (r *dnsRecordResource) Read(ctx context.Context, req resource.ReadRequest, 
 
 func (r *dnsRecordResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan dnsRecordResourceModel
+	var state dnsRecordResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	domainID, recordID, err := parseDNSRecordID(plan.ID.ValueString())
+	domainID, recordID, err := parseDNSRecordID(state.ID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid resource ID", err.Error())
 		return
 	}
 
-	domainName := strings.TrimSpace(plan.DomainName.ValueString())
+	domainName := ""
+	if !plan.DomainName.IsNull() && !plan.DomainName.IsUnknown() {
+		domainName = strings.TrimSpace(plan.DomainName.ValueString())
+	}
+	if domainName == "" && !state.DomainName.IsNull() && !state.DomainName.IsUnknown() {
+		domainName = strings.TrimSpace(state.DomainName.ValueString())
+	}
 	if domainName == "" {
 		_, resolvedDomainName, err := r.clientProvider.client.GetRootDomain(ctx, plan.Hostname.ValueString())
 		if err != nil {
@@ -226,13 +234,13 @@ func (r *dnsRecordResource) Update(ctx context.Context, req resource.UpdateReque
 	}
 
 	updateReq := dynuclient.UpdateDNSRecordRequest{
-		NodeName:   recordNodeName(plan.NodeName, plan.Hostname, domainName),
+		NodeName:   recordNodeName(preferKnownString(plan.NodeName, state.NodeName), plan.Hostname, domainName),
 		RecordType: recordType,
 		Content:    stringPointerFromOptionalContent(plan.Content),
-		TTL:        int64FromOptional(plan.TTL),
-		State:      boolPointerFromOptional(plan.State),
-		Group:      stringFromOptional(plan.Group),
-		Host:       stringFromOptional(plan.Host),
+		TTL:        int64FromOptional(preferKnownInt64(plan.TTL, state.TTL)),
+		State:      boolPointerFromOptional(preferKnownBool(plan.State, state.State)),
+		Group:      stringFromOptional(preferKnownString(plan.Group, state.Group)),
+		Host:       stringFromOptional(preferKnownString(plan.Host, state.Host)),
 	}
 	if !validateDNSRecordContentForType(updateReq.RecordType, updateReq.Content, dynamicIntent, &resp.Diagnostics) {
 		return
@@ -267,7 +275,7 @@ func (r *dnsRecordResource) Update(ctx context.Context, req resource.UpdateReque
 	}
 
 	nextState := mapDNSRecordToState(*record, dynamicIntent)
-	nextState.ID = types.StringValue(formatDNSRecordID(record.DomainID, record.ID))
+	nextState.ID = state.ID
 	resp.Diagnostics.Append(resp.State.Set(ctx, &nextState)...)
 }
 
@@ -380,6 +388,36 @@ func stringFromOptional(value types.String) string {
 		return ""
 	}
 	return strings.TrimSpace(value.ValueString())
+}
+
+func preferKnownString(planValue types.String, stateValue types.String) types.String {
+	if !planValue.IsNull() && !planValue.IsUnknown() {
+		return planValue
+	}
+	if !stateValue.IsNull() && !stateValue.IsUnknown() {
+		return stateValue
+	}
+	return planValue
+}
+
+func preferKnownInt64(planValue types.Int64, stateValue types.Int64) types.Int64 {
+	if !planValue.IsNull() && !planValue.IsUnknown() {
+		return planValue
+	}
+	if !stateValue.IsNull() && !stateValue.IsUnknown() {
+		return stateValue
+	}
+	return planValue
+}
+
+func preferKnownBool(planValue types.Bool, stateValue types.Bool) types.Bool {
+	if !planValue.IsNull() && !planValue.IsUnknown() {
+		return planValue
+	}
+	if !stateValue.IsNull() && !stateValue.IsUnknown() {
+		return stateValue
+	}
+	return planValue
 }
 
 func stringPointerFromOptionalContent(value types.String) *string {
