@@ -27,8 +27,8 @@ func TestIntegrationResourceDNSRecordLifecycleAndImport(t *testing.T) {
 		Hostname:   types.StringValue("api.a.example.com"),
 		RecordType: types.StringValue("TXT"),
 		Content:    types.StringValue("created"),
-		TTL:        types.Int64Value(60),
-		State:      types.BoolValue(true),
+		TTL:        types.Int64Value(90),
+		Enabled:    types.BoolValue(true),
 		Group:      types.StringValue("test"),
 		Host:       types.StringNull(),
 		NodeName:   types.StringNull(),
@@ -157,8 +157,8 @@ func TestIntegrationResourceDNSRecordDynamicAStateStableAndTransitionToStatic(t 
 		Hostname:   types.StringValue("api.a.example.com"),
 		RecordType: types.StringValue("A"),
 		Content:    types.StringNull(),
-		TTL:        types.Int64Value(60),
-		State:      types.BoolValue(true),
+		TTL:        types.Int64Value(90),
+		Enabled:    types.BoolValue(true),
 	}
 	plan := tfsdk.Plan{Schema: schemaResp.Schema}
 	if diags := plan.Set(ctx, &createPlan); diags.HasError() {
@@ -234,8 +234,8 @@ func TestIntegrationResourceDNSRecordUpdateUsesStateIDWhenPlanIDUnknown(t *testi
 		Hostname:   types.StringValue("api.a.example.com"),
 		RecordType: types.StringValue("TXT"),
 		Content:    types.StringValue("v=one"),
-		TTL:        types.Int64Value(60),
-		State:      types.BoolValue(true),
+		TTL:        types.Int64Value(90),
+		Enabled:    types.BoolValue(true),
 		Group:      types.StringValue("test-group"),
 		Host:       types.StringValue("test-host"),
 		NodeName:   types.StringValue("test-node"),

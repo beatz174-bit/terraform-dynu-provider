@@ -17,8 +17,9 @@ resource "dynu_dns_record" "a_ipv4" {
   hostname    = local.hostname_a_ipv4
   record_type = "A"
   content     = var.test_ipv4
-  ttl         = var.test_ttl
-  state       = true
+  ttl         = 90
+  enabled     = true
+  location    = var.test_location
 }
 
 resource "dynu_dns_record" "aaaa_ipv6" {
@@ -26,7 +27,8 @@ resource "dynu_dns_record" "aaaa_ipv6" {
   record_type = "AAAA"
   content     = var.test_ipv6
   ttl         = var.test_ttl
-  state       = true
+  enabled     = true
+  location    = var.test_location
 }
 
 resource "dynu_dns_record" "cname" {
@@ -34,7 +36,7 @@ resource "dynu_dns_record" "cname" {
   record_type = "CNAME"
   content     = var.test_cname_target
   ttl         = var.test_ttl
-  state       = true
+  enabled     = false
 }
 
 # Deliberate dynamic A record scenario: content intentionally omitted for Dynu dynamic IPv4 behavior.
@@ -42,7 +44,7 @@ resource "dynu_dns_record" "dynamic_a" {
   hostname    = local.hostname_dynamic_a
   record_type = "A"
   ttl         = var.test_ttl
-  state       = true
+  enabled     = true
 }
 
 # Deliberate dynamic AAAA record scenario: content intentionally omitted for Dynu dynamic IPv6 behavior.
@@ -50,5 +52,5 @@ resource "dynu_dns_record" "dynamic_aaaa" {
   hostname    = local.hostname_dynamic_aaaa
   record_type = "AAAA"
   ttl         = var.test_ttl
-  state       = true
+  enabled     = true
 }

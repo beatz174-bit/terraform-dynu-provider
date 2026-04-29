@@ -6,9 +6,9 @@ This example is an **opt-in live test** for writable Dynu provider functionality
 
 Using a single suffix (`test_suffix`), this example creates five DNS record scenarios under `dynu_root_domain`:
 
-1. `A` record with IPv4 content (`codex-a-<suffix>.<root_domain>`)
-2. `AAAA` record with IPv6 content (`codex-aaaa-<suffix>.<root_domain>`)
-3. `CNAME` record (`codex-cname-<suffix>.<root_domain>`)
+1. `A` record with IPv4 content, `location`, and minimum TTL=90 (`codex-a-<suffix>.<root_domain>`)
+2. `AAAA` record with IPv6 content and `location` (`codex-aaaa-<suffix>.<root_domain>`)
+3. `CNAME` record created disabled (`enabled = false`) (`codex-cname-<suffix>.<root_domain>`)
 4. **Dynamic `A` record** with omitted content (`codex-dynamic-a-<suffix>.<root_domain>`)
 5. **Dynamic `AAAA` record** with omitted content (`codex-dynamic-aaaa-<suffix>.<root_domain>`)
 
@@ -32,7 +32,10 @@ Edit `terraform.tfvars` and set at least:
 - `dynu_root_domain`
 - `test_suffix` (use a unique value per run)
 
-Optional overrides include `test_ipv4`, `test_ipv6`, and `test_cname_target`. Use real routable IPs for `test_ipv4`/`test_ipv6`; Dynu rejects documentation ranges such as `192.0.2.0/24` and `2001:db8::/32`.
+Optional overrides include `test_ipv4`, `test_ipv6`, `test_cname_target`, `test_ttl`, and `test_location`.
+
+- `test_ttl` must be `0` (provider/API default) or `>= 90`.
+- `test_location` applies only to A/AAAA records.
 
 ## Run
 
@@ -46,7 +49,7 @@ terraform destroy
 
 ## Notes
 
-- `terraform apply` should create all five record scenarios.
+- `terraform apply` should create all five record scenarios (including a disabled CNAME example).
 - `terraform destroy` should remove all five records created by this state.
 - If you need to target a single scenario, resources are explicitly named:
   - `dynu_dns_record.a_ipv4`

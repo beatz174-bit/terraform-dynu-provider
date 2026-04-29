@@ -173,6 +173,36 @@ func TestNormalizeDNSRecordUpdateRequestForType(t *testing.T) {
 	}
 }
 
+func TestValidateRecordTTLSeconds(t *testing.T) {
+	cases := []struct {
+		ttl  int64
+		want bool
+	}{
+		{ttl: 0, want: true},
+		{ttl: 89, want: false},
+		{ttl: 90, want: true},
+		{ttl: 1800, want: true},
+	}
+	for _, tc := range cases {
+		diags := diag.Diagnostics{}
+		got := validateRecordTTLSeconds(tc.ttl, &diags)
+		if got != tc.want {
+			t.Fatalf("validateRecordTTLSeconds(%d)=%v, want %v", tc.ttl, got, tc.want)
+		}
+	}
+}
+
+func TestValidateLocationForType(t *testing.T) {
+	diags := diag.Diagnostics{}
+	if !validateLocationForType("A", "us", &diags) || diags.HasError() {
+		t.Fatal("expected location for A to be valid")
+	}
+	diags = diag.Diagnostics{}
+	if validateLocationForType("CNAME", "us", &diags) || !diags.HasError() {
+		t.Fatal("expected location for CNAME to fail")
+	}
+}
+
 func TestInferDynamicIntentFromState(t *testing.T) {
 	tests := []struct {
 		name       string
