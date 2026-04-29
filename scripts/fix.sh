@@ -18,11 +18,12 @@ fi
 echo "[fix] running go mod tidy"
 go mod tidy
 
-if command -v terraform >/dev/null 2>&1; then
-  echo "[fix] running terraform fmt for examples/"
-  terraform fmt -recursive examples
-else
-  echo "[fix][warn] terraform not found; skipping examples/ formatting" >&2
+if ! command -v terraform >/dev/null 2>&1; then
+  echo "[fix][error] terraform not found in PATH" >&2
+  exit 1
 fi
+
+echo "[fix] running terraform fmt for examples/"
+terraform fmt -recursive examples
 
 echo "[fix] complete"
