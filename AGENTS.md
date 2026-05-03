@@ -4,19 +4,18 @@
 Build and maintain a standalone Terraform provider for Dynu DNS and domains.
 
 ## Scope
-Current phase is **read-only**.
+This provider supports full CRUD for Dynu DNS domains and DNS records.
 
-Implement:
-- Provider configuration
-- Environment variable support for credentials
-- Read-only data sources:
-  - `dynu_domains`
-  - `dynu_domain`
-  - `dynu_dns_records`
+Current inventory:
 
-Do not implement in this phase:
-- Any Terraform resources with create/update/delete
-- Any write HTTP methods
+### Resources
+- `dynu_domain` (CRUD + import)
+- `dynu_dns_record` (CRUD + import)
+
+### Data sources
+- `dynu_domains`
+- `dynu_domain`
+- `dynu_dns_records`
 
 ## Language and framework
 - Language: Go
@@ -30,6 +29,23 @@ Do not implement in this phase:
 - Handle pagination and API errors clearly
 - Never log secrets or credentials
 
+## Implementation expectations for agents
+When making changes, agents must:
+- preserve backwards compatibility where possible
+- ensure Terraform idempotency (no diff after apply)
+- validate all API interactions against Dynu behaviour
+- maintain consistent schema design (`optional` vs `computed` vs `required`)
+- ensure tests pass before adding new features
+
+## DNS record type guidance
+- Multiple DNS record types are supported, including `A`, `AAAA`, `CNAME`, `MX`, `TXT`, `SRV`, and `CAA` fields exposed by schema.
+- Apply type-specific handling consistently:
+  - `MX`/`SRV`: ensure priority semantics are correct.
+  - `SRV`: ensure `weight` and `port` handling is preserved.
+  - `TXT`: preserve exact value semantics and quoting expectations from Terraform configuration.
+  - `CAA`: preserve `flags`, `tag`, and `value` field behavior.
+- For dynamic `A`/`AAAA` behavior, avoid introducing drift-prone behavior or unsafe payload normalization.
+
 ## Portability requirements
 - Keep the repository generic and standalone
 - Do not reference personal infrastructure, private domains, homelab tooling, or external repo scripts
@@ -37,16 +53,21 @@ Do not implement in this phase:
 - Avoid hardcoded local filesystem paths
 
 ## Testing
-- Add unit tests where practical
-- Gate acceptance tests behind generic environment variables
+- `go test ./...` must pass.
+- Add unit tests where practical; new features must include tests.
+- Gate acceptance tests behind generic environment variables:
   - `TF_ACC=1`
   - `DYNU_API_KEY`
   - optional `DYNU_DOMAIN` for domain-specific acceptance coverage
-- Unit tests must not require live credentials
+- Unit tests must not require live credentials.
+- End-to-end Terraform example(s) must remain valid.
+
+## Destructive operation warning
+- Deleting `dynu_domain` removes the entire Dynu DNS zone for that domain.
+- Agents must not introduce unsafe defaults or implicit destructive behavior.
 
 ## Documentation
 - Keep README and examples aligned with actual provider behavior
-- Document current read-only limitations clearly
 - Include build, test, and acceptance test instructions for any contributor
 
 ## Developer scripts
@@ -56,8 +77,6 @@ Do not implement in this phase:
 
 ## Output expectations
 Changes should keep the provider idiomatic, easy to contribute to, and ready for public/open-source usage.
-
-## Agent instructions
 
 ## Validation workflow (Codex and local)
 

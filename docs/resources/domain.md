@@ -1,6 +1,6 @@
 # dynu_domain Resource
 
-Manages a Dynu DNS domain.
+Manages a Dynu DNS root domain.
 
 ## Example Usage
 
@@ -18,6 +18,27 @@ resource "dynu_dns_record" "www" {
 }
 ```
 
+## Schema
+
+### Required
+
+- `name` (String) Root domain name. Changing this forces replacement.
+
+### Optional + Computed
+
+- `ipv4_address` (String)
+- `ipv6_address` (String)
+- `ttl` (Number)
+- `group` (String)
+
+These fields can be configured, and also reflect values returned by Dynu.
+
+### Computed
+
+- `id` (Number) Dynu numeric domain ID.
+- `state` (String) Dynu state.
+- `token` (String, Sensitive) Dynu domain token.
+
 ## Import
 
 Import using the numeric Dynu domain ID:
@@ -26,45 +47,6 @@ Import using the numeric Dynu domain ID:
 terraform import dynu_domain.example 1234
 ```
 
-## Attributes
+## Warning
 
-- `id` (Number) Dynu domain ID.
-- `name` (String) Domain name (forces replacement when changed).
-- `ipv4_address` (String) Optional IPv4 address.
-- `ipv6_address` (String) Optional IPv6 address.
-- `ttl` (Number) Optional TTL.
-- `group` (String) Optional group.
-- `state` (String) Computed state from Dynu API.
-- `token` (String, Sensitive) Computed domain token from Dynu API.
-
-## DNS record examples under this domain
-
-```terraform
-resource "dynu_dns_record" "mx" {
-  hostname    = dynu_domain.example.name
-  record_type = "MX"
-  content     = "mail.my-test-domain.example"
-  priority    = 10
-}
-
-resource "dynu_dns_record" "txt_spf" {
-  hostname    = dynu_domain.example.name
-  record_type = "TXT"
-  content     = "v=spf1 include:_spf.example.com ~all"
-}
-
-resource "dynu_dns_record" "cname" {
-  hostname    = "app.${dynu_domain.example.name}"
-  record_type = "CNAME"
-  content     = "target.example.net"
-}
-
-resource "dynu_dns_record" "srv" {
-  hostname    = "_sip._tcp.${dynu_domain.example.name}"
-  record_type = "SRV"
-  content     = "sip.my-test-domain.example"
-  priority    = 10
-  weight      = 5
-  port        = 5060
-}
-```
+Deleting this resource deletes the entire Dynu DNS zone for that domain.

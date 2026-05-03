@@ -1,12 +1,12 @@
 ---
 page_title: "dynu Provider"
 description: |-
-  Terraform provider for Dynu DNS read-only data sources.
+  Terraform provider for Dynu DNS domains and DNS records (full CRUD) plus lookup data sources.
 ---
 
 # dynu Provider
 
-The `dynu` provider lets Terraform read Dynu DNS domain and record data.
+The `dynu` provider manages Dynu root domains and DNS records, and supports lookup data sources for discovery workflows.
 This provider repository is standalone and does not require any external companion repository or helper script.
 
 ## Example Usage
