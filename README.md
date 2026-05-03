@@ -1,23 +1,98 @@
 # terraform-provider-dynu
 
-A standalone Terraform provider for Dynu DNS.
+A standalone Terraform provider for Dynu DNS and domain management.
 
-> Status: **early CRUD milestone**. This provider includes read-only data sources plus one writable resource (`dynu_dns_record`) to establish CRUD foundations.
+## Features
 
-## Quick start (local dev with `dev_overrides`)
+- Full CRUD for Dynu root domains via `dynu_domain`.
+- Full CRUD for Dynu DNS records via `dynu_dns_record`.
+- Read-only discovery data sources:
+  - `dynu_domains`
+  - `dynu_domain`
+  - `dynu_dns_records`
+- Provider authentication via `api_key` or `DYNU_API_KEY`.
 
-This provider is **not published** to the Terraform Registry yet. For local development, use Terraform CLI `dev_overrides` and your local provider binary.
+## Minimal usage example
 
-1. Build provider binary in repo root:
+```hcl
+terraform {
+  required_providers {
+    dynu = {
+      source = "dynu/dynu"
+    }
+  }
+}
+
+provider "dynu" {
+  api_key = var.dynu_api_key
+}
+
+variable "dynu_api_key" {
+  type      = string
+  sensitive = true
+}
+
+resource "dynu_domain" "example" {
+  name = "my-test-domain.example"
+  ttl  = 300
+}
+
+resource "dynu_dns_record" "www" {
+  hostname    = "www.${dynu_domain.example.name}"
+  record_type = "A"
+  content     = "198.51.100.20"
+  ttl         = 300
+}
+```
+
+For a live end-to-end workflow that exercises multiple record types, see `examples/live_safe_dns_record/README.md`.
+
+## Resources
+
+- `dynu_domain`
+- `dynu_dns_record`
+
+## Data sources
+
+- `dynu_domains`
+- `dynu_domain`
+- `dynu_dns_records`
+
+## Testing
+
+Run Go unit/integration tests:
+
+```bash
+go test ./...
+```
+
+Run repository checks:
+
+```bash
+./scripts/fix.sh
+./scripts/check.sh
+```
+
+Run the live end-to-end Terraform example (opt-in, uses real Dynu account data):
+
+```bash
+cd examples/live_safe_dns_record
+cp terraform.tfvars.example terraform.tfvars
+terraform validate
+terraform plan
+# terraform apply
+# terraform destroy
+```
+
+## Development
+
+This provider is not yet published to the Terraform Registry. Use `dev_overrides` with a local build.
+
+1. Build the provider binary:
 
 ```bash
 go build -o terraform-provider-dynu
 ```
-
-By default, local builds use embedded metadata values:
-- `version=dev`
-- `commit=none`
-- `built=unknown`
 
 2. Configure `~/.terraformrc`:
 
@@ -31,7 +106,7 @@ provider_installation {
 }
 ```
 
-3. Run the runnable read-only example:
+3. Validate locally without relying on registry publishing:
 
 ```bash
 cd examples/read_only
@@ -40,296 +115,4 @@ terraform validate
 terraform plan
 ```
 
-4. Run the live-safe write example (opt-in, creates a disposable DNS record only):
-
-```bash
-cd examples/live_safe_dns_record
-cp terraform.tfvars.example terraform.tfvars
-# set only dynu_root_domain to a Dynu-managed root zone you control
-terraform validate
-terraform plan
-```
-
-> [!WARNING]
-> Do not run `terraform init` as part of the normal Codex/local test loop for this repo. Because the provider is not yet published to the Terraform Registry, `init` may attempt registry/network resolution and fail or give misleading results. Use `dev_overrides`, rebuild the local binary, then run `terraform validate` and `terraform plan`.
->
-> With `dev_overrides`, Terraform uses your local binary for `dynu/dynu`.
-
-### Codex/local validation loop
-
-Use this expected loop for local verification and Codex-driven validation:
-
-```bash
-go build -o terraform-provider-dynu
-cd examples/read_only
-terraform validate
-terraform plan
-```
-
-When provider configuration or code changes, rebuild the provider binary first, then re-run `terraform validate` and `terraform plan`.
-
-### Version metadata in binaries
-
-The provider embeds build metadata (`version`, `commit`, `date`) in the binary.
-
-- Local builds (no `-ldflags`) default to:
-  - `version=dev`
-  - `commit=none`
-  - `built=unknown`
-- You can inspect metadata from the binary with either:
-  - `./terraform-provider-dynu --version`
-  - `./terraform-provider-dynu version`
-
-Primary build method (recommended):
-
-```bash
-./build.sh v0.2.0
-```
-
-`build.sh` takes exactly one argument (the version string), then derives commit and date automatically:
-- `COMMIT=$(git rev-parse --short HEAD)`
-- `DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)`
-
-Manual equivalent (same stamped build command used by `build.sh`):
-
-```bash
-VERSION=v0.2.0
-COMMIT=$(git rev-parse --short HEAD)
-DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-
-go build -o terraform-provider-dynu \
-  -ldflags="-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}"
-```
-
-Release tag/version mapping:
-- Git tag `v0.1.0` -> build with `VERSION=v0.1.0`
-- Git tag `v0.2.0` -> build with `VERSION=v0.2.0`
-
-## Copy/paste starter configuration
-
-```hcl
-terraform {
-  required_providers {
-    dynu = {
-      source = "dynu/dynu"
-    }
-  }
-}
-
-provider "dynu" {
-  api_key = var.dynu_api_key # optional if DYNU_API_KEY is set
-}
-
-variable "dynu_api_key" {
-  type      = string
-  default   = null
-  sensitive = true
-}
-
-data "dynu_domains" "all" {}
-
-# Use a real hostname from your Dynu account.
-data "dynu_domain" "selected" {
-  hostname = "www.example.com"
-}
-
-data "dynu_dns_records" "selected" {
-  hostname = "www.example.com"
-}
-```
-
-## Provider schema reference
-
-### Provider: `dynu`
-
-Optional arguments:
-- `api_key` (String, Sensitive)
-  - Falls back to `DYNU_API_KEY` environment variable when omitted.
-- `base_url` (String)
-  - Test/dev override for Dynu API base URL.
-
-Provider resources:
-- `dynu_dns_record` (first writable resource)
-
-
-### `dynu_dns_record`
-
-Arguments:
-- `hostname` (String, required)
-- `record_type` (String, required)
-- `content` (String, optional/computed)
-  - For `A` and `AAAA`, omitted/blank content means Dynu dynamic-IP intent.
-  - For non-`A`/`AAAA` record types, content is required.
-- `dynamic` (Bool, optional/computed)
-  - Explicit dynamic-mode toggle for `A`/`AAAA`. Existing omitted `content` behavior remains backward compatible.
-- `ttl` (Number, optional)
-- `enabled` (Bool, optional, defaults to `true`)
-- `group` (String, optional)
-- `host` (String, optional)
-- `node_name` (String, optional)
-
-Attributes:
-- `id` (String) in `domain_id/record_id` format
-- `domain_id` (Number)
-- `domain_name` (String)
-- `updated_on` (String)
-- plus all configurable arguments
-
-Example:
-
-```hcl
-resource "dynu_dns_record" "txt" {
-  hostname    = "api.example.com"
-  record_type = "A"
-  content     = "198.51.100.10"
-  ttl         = 90
-  enabled     = false
-}
-
-resource "dynu_dns_record" "dynamic_a" {
-  hostname    = "auth.example.com"
-  record_type = "A"
-  # content intentionally omitted for Dynu dynamic IPv4 behavior
-}
-```
-
-Notes:
-- Dynu control-panel semantics treat blank `A`/`AAAA` values as dynamic/inherited records, not invalid static records.
-- Dynu can surface inherited/current values with parentheses in the UI (for example `(203.0.113.10)`); provider state preserves dynamic intent to avoid perpetual drift from changing live IPs.
-- The provider avoids sending empty-string IP payloads, and if Dynu rejects omitted IP fields in an API path, it uses a documented fallback emulation path based on the root domain current address/group metadata.
-
-## Data source schema reference
-
-### `dynu_domains`
-
-Arguments:
-- none
-
-Attributes:
-- `domains` (List(Object)):
-  - `id`, `name`, `unicode_name`, `token` (sensitive), `state`, `group`
-  - `ipv4_address`, `ipv6_address`, `ttl`
-  - `ipv4`, `ipv6`, `ipv4_wildcard_alias`, `ipv6_wildcard_alias`
-  - `allow_zone_transfer`, `dnssec`, `created_on`, `updated_on`
-
-Example:
-
-```hcl
-data "dynu_domains" "all" {}
-```
-
-### `dynu_domain`
-
-Arguments:
-- `hostname` (String, required)
-
-Attributes:
-- `domain` (Object) with the same fields as `dynu_domains.domains[*]`.
-
-Example:
-
-```hcl
-data "dynu_domain" "selected" {
-  hostname = "www.example.com"
-}
-```
-
-### `dynu_dns_records`
-
-Arguments:
-- `hostname` (String, required)
-
-Attributes:
-- `domain_id` (Number)
-- `domain_name` (String)
-- `records` (List(Object)) with:
-  - `id`, `domain_id`, `domain_name`, `node_name`, `hostname`, `record_type`
-  - `ttl`, `state`, `content`, `updated_on`, `group`, `host`
-
-Example:
-
-```hcl
-data "dynu_dns_records" "selected" {
-  hostname = "www.example.com"
-}
-```
-
-## Examples
-
-- Runnable local workflow: `examples/read_only/`
-- Live-safe write lifecycle workflow: `examples/live_safe_dns_record/`
-- Provider block example: `examples/provider/provider.tf`
-- Individual data source snippets:
-  - `examples/data-sources/dynu_domains/data-source.tf`
-  - `examples/data-sources/dynu_domain/data-source.tf`
-  - `examples/data-sources/dynu_dns_records/data-source.tf`
-- Resource snippet:
-  - `examples/resources/dynu_dns_record/resource.tf`
-
-## Troubleshooting local dev
-
-- **Unsupported provider arguments**
-  - Symptom: errors such as `Unsupported argument` (for example `username`).
-  - Fix: use only `api_key` and/or `base_url` in `provider "dynu"`.
-
-- **Bad API credentials**
-  - Symptom: diagnostics mention authentication failures.
-  - Fix: verify `api_key` or `DYNU_API_KEY` and re-run `terraform plan`.
-
-- **Unknown data source arguments**
-  - Symptom: unsupported argument errors in data blocks.
-  - Fix: `dynu_domain` and `dynu_dns_records` require only `hostname`; `dynu_domains` takes no arguments.
-
-- **Stale provider binary after code changes**
-  - Symptom: Terraform behavior doesn't reflect latest code.
-  - Fix: rebuild binary (`go build -o terraform-provider-dynu`) and re-run `terraform validate` and `terraform plan`.
-
-## Development checks
-
-Before committing, run:
-
-```bash
-./scripts/fix.sh
-./scripts/check.sh
-```
-
-`fix.sh` applies standard formatting and module hygiene.  
-`check.sh` is the strict verification script used by CI.
-
-## Developer workflow
-
-- `./scripts/setup-dev.sh` - validate local toolchain requirements
-- `./scripts/check.sh` - formatting, vet, and unit tests
-- `./scripts/test-integration.sh` - local mock-backed provider integration tests
-- `./scripts/testacc.sh` - acceptance/integration test wrapper (live tests opt-in)
-
-Live acceptance tests are opt-in and require:
-- `TF_ACC=1`
-- `DYNU_API_KEY`
-- optional `DYNU_DOMAIN` for domain-specific coverage
-
-### Live safe write testing
-
-Use `examples/live_safe_dns_record` when you want to safely validate writable provider behavior against a real Dynu account.
-
-- This example creates a unique temporary subdomain in the form `<prefix>-<random>.<dynu_root_domain>`.
-- It creates exactly one disposable `A` record using a default IPv4 value accepted by Dynu.
-- It is designed so `terraform destroy` removes only the created disposable record from that run/state.
-
-Safety guidance:
-- Set `dynu_root_domain` to a root Dynu-managed zone you control (for example `example.com`).
-- Do **not** supply or target an existing live full hostname you care about.
-- If apply is interrupted, rerun `terraform destroy` from the same directory/state to clean up.
-
-## Feature scope
-
-Implemented:
-- Provider authentication via `api_key` or `DYNU_API_KEY`
-- Optional provider `base_url` override
-- Data sources: `dynu_domains`, `dynu_domain`, `dynu_dns_records`
-- Resource: `dynu_domain` (CRUD + import using numeric domain ID)
-- Resource: `dynu_dns_record` (CRUD + import using `domain_id/record_id`)
-
-Not implemented yet:
-- Additional Terraform resources beyond `dynu_domain` and `dynu_dns_record`
-- Broader Dynu API coverage outside current DNS/domain scope
+When provider code/config changes, rebuild `terraform-provider-dynu` before re-running Terraform commands.
