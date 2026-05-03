@@ -59,6 +59,19 @@ type dnsRecordUpsertRequest struct {
 	State       *bool  `json:"state"`
 	Group       string `json:"group"`
 	Host        string `json:"host"`
+	Priority    int64  `json:"priority"`
+	Weight      int64  `json:"weight"`
+	Port        int64  `json:"port"`
+	Flags       int64  `json:"flags"`
+	Tag         string `json:"tag"`
+	Value       string `json:"value"`
+}
+type domainUpsertRequest struct {
+	Name        string `json:"name"`
+	IPv4Address string `json:"ipv4Address"`
+	IPv6Address string `json:"ipv6Address"`
+	TTL         int64  `json:"ttl"`
+	Group       string `json:"group"`
 }
 
 func NewServer() *Server {
@@ -145,6 +158,9 @@ func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodGet && r.URL.Path == "/dns":
 		s.writeJSON(w, http.StatusOK, map[string]any{"statusCode": 200, "domains": s.fixture.Domains})
 		return
+	case r.Method == http.MethodPost && r.URL.Path == "/dns":
+		s.handleCreateDomain(w, r)
+		return
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/dns/getroot/"):
 		hostname := strings.TrimPrefix(r.URL.Path, "/dns/getroot/")
 		root, ok := s.fixture.RootsByHostname[hostname]
@@ -172,7 +188,7 @@ func (s *Server) serveDNSPath(w http.ResponseWriter, r *http.Request) {
 	trimmed := strings.TrimPrefix(r.URL.Path, "/dns/")
 	segments := strings.Split(trimmed, "/")
 	if len(segments) == 1 {
-		s.serveDomainByID(w, r.Method, segments[0])
+		s.serveDomainByID(w, r, segments[0])
 		return
 	}
 
@@ -184,18 +200,27 @@ func (s *Server) serveDNSPath(w http.ResponseWriter, r *http.Request) {
 	s.writeAPIError(w, APIError{HTTPStatus: http.StatusNotFound, StatusCode: 404, Type: "Not Found", Message: "endpoint not found"})
 }
 
-func (s *Server) serveDomainByID(w http.ResponseWriter, method string, rawDomainID string) {
-	if method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
+func (s *Server) serveDomainByID(w http.ResponseWriter, r *http.Request, rawDomainID string) {
 	domainID, err := strconv.ParseInt(rawDomainID, 10, 64)
 	if err != nil {
 		s.writeAPIError(w, APIError{HTTPStatus: http.StatusBadRequest, StatusCode: 400, Type: "Validation Exception", Message: "invalid domain id: " + rawDomainID})
 		return
 	}
-	for _, domain := range s.fixture.Domains {
+	for idx, domain := range s.fixture.Domains {
 		if domain.ID == domainID {
+			if r.Method == http.MethodDelete {
+				s.fixture.Domains = append(s.fixture.Domains[:idx], s.fixture.Domains[idx+1:]...)
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			if r.Method == http.MethodPost {
+				s.handleUpdateDomain(w, r, idx)
+				return
+			}
+			if r.Method != http.MethodGet {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				return
+			}
 			payload := map[string]any{"statusCode": 200}
 			b, _ := json.Marshal(domain)
 			_ = json.Unmarshal(b, &payload)
@@ -204,6 +229,42 @@ func (s *Server) serveDomainByID(w http.ResponseWriter, method string, rawDomain
 		}
 	}
 	s.writeAPIError(w, APIError{HTTPStatus: http.StatusNotFound, StatusCode: 404, Type: "Not Found", Message: "domain not found"})
+}
+
+func (s *Server) handleCreateDomain(w http.ResponseWriter, r *http.Request) {
+	var req domainUpsertRequest
+	if err := decodeJSONBody(r.Body, &req); err != nil {
+		s.writeAPIError(w, APIError{HTTPStatus: http.StatusBadRequest, StatusCode: 400, Type: "Validation Exception", Message: "invalid request body"})
+		return
+	}
+	id := int64(len(s.fixture.Domains) + 5000)
+	domain := dynuclient.Domain{ID: id, Name: req.Name, UnicodeName: req.Name, IPv4Address: req.IPv4Address, IPv6Address: req.IPv6Address, TTL: req.TTL, Group: req.Group, State: "active", Token: fmt.Sprintf("tok-%d", id)}
+	s.fixture.Domains = append(s.fixture.Domains, domain)
+	payload := map[string]any{"statusCode": 200}
+	b, _ := json.Marshal(domain)
+	_ = json.Unmarshal(b, &payload)
+	s.writeJSON(w, http.StatusOK, payload)
+}
+func (s *Server) handleUpdateDomain(w http.ResponseWriter, r *http.Request, idx int) {
+	var req domainUpsertRequest
+	if err := decodeJSONBody(r.Body, &req); err != nil {
+		s.writeAPIError(w, APIError{HTTPStatus: http.StatusBadRequest, StatusCode: 400, Type: "Validation Exception", Message: "invalid request body"})
+		return
+	}
+	domain := s.fixture.Domains[idx]
+	domain.Name = req.Name
+	domain.UnicodeName = req.Name
+	domain.IPv4Address = req.IPv4Address
+	domain.IPv6Address = req.IPv6Address
+	if req.TTL != 0 {
+		domain.TTL = req.TTL
+	}
+	domain.Group = req.Group
+	s.fixture.Domains[idx] = domain
+	payload := map[string]any{"statusCode": 200}
+	b, _ := json.Marshal(domain)
+	_ = json.Unmarshal(b, &payload)
+	s.writeJSON(w, http.StatusOK, payload)
 }
 
 func (s *Server) serveRecordRoutes(w http.ResponseWriter, r *http.Request, segments []string) {
@@ -306,6 +367,12 @@ func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request, doma
 		UpdatedOn:  time.Now().UTC().Format(time.RFC3339),
 		Group:      req.Group,
 		Host:       req.Host,
+		Priority:   req.Priority,
+		Weight:     req.Weight,
+		Port:       req.Port,
+		Flags:      req.Flags,
+		Tag:        req.Tag,
+		Value:      req.Value,
 	}
 
 	s.fixture.RecordsByDomain[domainID] = append(s.fixture.RecordsByDomain[domainID], record)
@@ -336,6 +403,12 @@ func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request, doma
 	}
 	record.Group = req.Group
 	record.Host = req.Host
+	record.Priority = req.Priority
+	record.Weight = req.Weight
+	record.Port = req.Port
+	record.Flags = req.Flags
+	record.Tag = req.Tag
+	record.Value = req.Value
 	record.Hostname = buildHostname(req.NodeName, record.DomainName)
 	record.UpdatedOn = time.Now().UTC().Format(time.RFC3339)
 
@@ -352,6 +425,14 @@ func contentFromUpsertRequest(req dnsRecordUpsertRequest) string {
 	case "CNAME":
 		if strings.TrimSpace(req.Host) != "" {
 			return strings.TrimSpace(req.Host)
+		}
+	case "MX", "SRV", "NS", "PTR":
+		if strings.TrimSpace(req.Host) != "" {
+			return strings.TrimSpace(req.Host)
+		}
+	case "CAA":
+		if strings.TrimSpace(req.Value) != "" {
+			return strings.TrimSpace(req.Value)
 		}
 	}
 	return strings.TrimSpace(req.Content)
@@ -383,6 +464,15 @@ func (s *Server) decodeUpsertRequest(w http.ResponseWriter, r *http.Request) (dn
 		return dnsRecordUpsertRequest{}, false
 	}
 	return req, true
+}
+
+func decodeJSONBody(body io.ReadCloser, target any) error {
+	defer body.Close()
+	payload, err := io.ReadAll(body)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(payload, target)
 }
 
 func (s *Server) findRecord(domainID int64, recordID int64) (dynuclient.DNSRecord, int, bool) {

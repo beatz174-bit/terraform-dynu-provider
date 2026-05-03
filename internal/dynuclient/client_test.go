@@ -457,3 +457,91 @@ func TestClientCreateDNSRecordOmitsContentWhenUnset(t *testing.T) {
 func stringPointer(value string) *string {
 	return &value
 }
+
+func TestClientDomainCRUD(t *testing.T) {
+	fake := fakedynu.NewServer()
+	defer fake.Close()
+	client := dynuclient.New("test-key", dynuclient.WithBaseURL(fake.BaseURL()), dynuclient.WithHTTPClient(fake.Client()))
+
+	created, err := client.CreateDomain(context.Background(), dynuclient.CreateDomainRequest{Name: "new.example.com", TTL: 300, IPv4Address: "203.0.113.10"})
+	if err != nil {
+		t.Fatalf("CreateDomain() error = %v", err)
+	}
+	if created.ID == 0 || created.Name != "new.example.com" {
+		t.Fatalf("unexpected created domain: %#v", created)
+	}
+
+	updated, err := client.UpdateDomain(context.Background(), created.ID, dynuclient.UpdateDomainRequest{Name: "new.example.com", TTL: 600})
+	if err != nil {
+		t.Fatalf("UpdateDomain() error = %v", err)
+	}
+	if updated.TTL != 600 {
+		t.Fatalf("expected ttl 600, got %d", updated.TTL)
+	}
+
+	if err := client.DeleteDomain(context.Background(), created.ID); err != nil {
+		t.Fatalf("DeleteDomain() error = %v", err)
+	}
+	_, err = client.GetDomainByID(context.Background(), created.ID)
+	if err == nil {
+		t.Fatalf("expected error reading deleted domain")
+	}
+}
+
+func TestClientCreateDNSRecordSendsMXFields(t *testing.T) {
+	fake := fakedynu.NewServer()
+	defer fake.Close()
+	client := dynuclient.New("test-key", dynuclient.WithBaseURL(fake.BaseURL()), dynuclient.WithHTTPClient(fake.Client()))
+	host := "mail.example.com"
+	_, err := client.CreateDNSRecord(context.Background(), 1001, dynuclient.CreateDNSRecordRequest{NodeName: "@", RecordType: "MX", Content: &host, Priority: 10})
+	if err != nil {
+		t.Fatalf("CreateDNSRecord() error = %v", err)
+	}
+	rec, _ := client.GetDNSRecord(context.Background(), 1001, 21)
+	if rec.Priority != 10 || rec.Host != host {
+		t.Fatalf("unexpected MX fields: %#v", rec)
+	}
+}
+
+func TestClientCreateDNSRecordSendsSRVFields(t *testing.T) {
+	fake := fakedynu.NewServer()
+	defer fake.Close()
+	client := dynuclient.New("test-key", dynuclient.WithBaseURL(fake.BaseURL()), dynuclient.WithHTTPClient(fake.Client()))
+	target := "sip.example.com"
+	_, err := client.CreateDNSRecord(context.Background(), 1001, dynuclient.CreateDNSRecordRequest{NodeName: "_sip._tcp", RecordType: "SRV", Content: &target, Priority: 10, Weight: 5, Port: 5060})
+	if err != nil {
+		t.Fatalf("CreateDNSRecord() error = %v", err)
+	}
+	rec, _ := client.GetDNSRecord(context.Background(), 1001, 21)
+	if rec.Port != 5060 || rec.Weight != 5 || rec.Host != target {
+		t.Fatalf("unexpected SRV fields: %#v", rec)
+	}
+}
+
+func TestClientCreateDNSRecordPreservesTXTContent(t *testing.T) {
+	fake := fakedynu.NewServer()
+	defer fake.Close()
+	client := dynuclient.New("test-key", dynuclient.WithBaseURL(fake.BaseURL()), dynuclient.WithHTTPClient(fake.Client()))
+	txt := "v=spf1 include:_spf.example.com ~all"
+	rec, err := client.CreateDNSRecord(context.Background(), 1001, dynuclient.CreateDNSRecordRequest{NodeName: "@", RecordType: "TXT", Content: &txt})
+	if err != nil {
+		t.Fatalf("CreateDNSRecord() error = %v", err)
+	}
+	if rec.Content != txt {
+		t.Fatalf("expected TXT content preserved, got %q", rec.Content)
+	}
+}
+
+func TestClientCreateDNSRecordSendsCAAFields(t *testing.T) {
+	fake := fakedynu.NewServer()
+	defer fake.Close()
+	client := dynuclient.New("test-key", dynuclient.WithBaseURL(fake.BaseURL()), dynuclient.WithHTTPClient(fake.Client()))
+	value := "letsencrypt.org"
+	rec, err := client.CreateDNSRecord(context.Background(), 1001, dynuclient.CreateDNSRecordRequest{NodeName: "@", RecordType: "CAA", Content: &value, Flags: 0, Tag: "issue"})
+	if err != nil {
+		t.Fatalf("CreateDNSRecord() error = %v", err)
+	}
+	if rec.Tag != "issue" || rec.Value != value {
+		t.Fatalf("unexpected CAA fields: %#v", rec)
+	}
+}
