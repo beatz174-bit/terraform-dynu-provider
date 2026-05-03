@@ -1,5 +1,5 @@
 variable "dynu_api_key" {
-  description = "Dynu API key. Leave null to use DYNU_API_KEY from environment."
+  description = "Dynu API key used by the provider. Set in terraform.tfvars."
   type        = string
   default     = null
   sensitive   = true

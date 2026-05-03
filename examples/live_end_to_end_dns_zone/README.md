@@ -20,9 +20,7 @@ This example performs full live validation of the Dynu provider lifecycle by cre
 ## Prerequisites
 
 - A local build of this provider with Terraform `dev_overrides` for `dynu/dynu`.
-- Dynu API key provided either by:
-  - environment variable `DYNU_API_KEY`, or
-  - Terraform variable `dynu_api_key`.
+- Dynu API key provided as Terraform variable `dynu_api_key` (for example via `terraform.tfvars`).
 - A disposable domain value for `test_domain`.
 
 ## Required variables
@@ -31,7 +29,7 @@ Create `terraform.tfvars` in this folder:
 
 ```hcl
 test_domain = "my-disposable-test-domain.example"
-# dynu_api_key = "..." # optional if DYNU_API_KEY is exported
+dynu_api_key = "..."
 ```
 
 ## Commands

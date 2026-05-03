@@ -7,7 +7,7 @@ terraform {
 }
 
 provider "dynu" {
-  # api_key can be omitted when DYNU_API_KEY is set.
+  # Set var.dynu_api_key in terraform.tfvars.
   api_key = var.dynu_api_key
 }
 

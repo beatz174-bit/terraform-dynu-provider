@@ -1,5 +1,4 @@
-# Optional if DYNU_API_KEY is exported in your shell.
-# dynu_api_key = "REPLACE_ME"
+dynu_api_key = "REPLACE_ME"
 
 # Required: a Dynu-managed root domain/zone that you control.
 # Do NOT put an existing production hostname here.

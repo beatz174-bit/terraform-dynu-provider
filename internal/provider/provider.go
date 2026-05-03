@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"os"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -48,7 +47,7 @@ func (p *dynuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 			"api_key": schema.StringAttribute{
 				Optional:    true,
 				Sensitive:   true,
-				Description: "Dynu API key. If omitted, the provider uses the DYNU_API_KEY environment variable.",
+				Description: "Dynu API key. Set this explicitly, such as via a Terraform variable in terraform.tfvars.",
 			},
 			"base_url": schema.StringAttribute{
 				Optional:    true,
@@ -66,12 +65,12 @@ func (p *dynuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		return
 	}
 
-	apiKey := resolveAPIKey(data.APIKey, os.Getenv("DYNU_API_KEY"))
+	apiKey := resolveAPIKey(data.APIKey)
 	if apiKey == "" {
 		resp.Diagnostics.AddAttributeError(
 			path.Root("api_key"),
 			"Missing Dynu API key",
-			"Configure api_key in the provider block or set the DYNU_API_KEY environment variable.",
+			"Configure api_key in the provider block (for example, from var.dynu_api_key set in terraform.tfvars).",
 		)
 		return
 	}
@@ -81,11 +80,11 @@ func (p *dynuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 	resp.ResourceData = providerData
 }
 
-func resolveAPIKey(configValue types.String, envValue string) string {
+func resolveAPIKey(configValue types.String) string {
 	if !configValue.IsNull() && !configValue.IsUnknown() {
 		return strings.TrimSpace(configValue.ValueString())
 	}
-	return strings.TrimSpace(envValue)
+	return ""
 }
 
 func (p *dynuProvider) DataSources(_ context.Context) []func() datasource.DataSource {
