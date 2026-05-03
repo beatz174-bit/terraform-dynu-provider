@@ -10,7 +10,7 @@ A standalone Terraform provider for Dynu DNS and domain management.
   - `dynu_domains`
   - `dynu_domain`
   - `dynu_dns_records`
-- Provider authentication via `api_key` or `DYNU_API_KEY`.
+- Provider authentication via `api_key`.
 
 ## Minimal usage example
 

@@ -29,5 +29,5 @@ provider "dynu" {
 
 ### Optional
 
-- `api_key` (String, Sensitive) Dynu API key. If omitted, `DYNU_API_KEY` is used.
+- `api_key` (String, Sensitive) Dynu API key. Configure via provider argument (for example with `var.dynu_api_key` from `terraform.tfvars`).
 - `base_url` (String) Override API base URL. Primarily intended for automated tests.

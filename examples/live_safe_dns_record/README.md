@@ -18,7 +18,7 @@ Using a single suffix (`test_suffix`), this example creates five DNS record scen
 ## Prerequisites
 
 - Local provider binary + Terraform `dev_overrides` for `dynu/dynu`
-- `DYNU_API_KEY` exported, or `dynu_api_key` set in `terraform.tfvars`
+- `dynu_api_key` set in `terraform.tfvars`
 - A Dynu-managed root domain you control
 
 ## Configure
