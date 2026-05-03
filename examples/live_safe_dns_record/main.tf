@@ -17,7 +17,7 @@ resource "dynu_dns_record" "a_ipv4" {
   hostname    = local.hostname_a_ipv4
   record_type = "A"
   content     = var.test_ipv4
-  ttl         = 90
+  ttl         = var.test_ttl
   enabled     = true
 }
 
@@ -34,7 +34,7 @@ resource "dynu_dns_record" "cname" {
   record_type = "CNAME"
   content     = var.test_cname_target
   ttl         = var.test_ttl
-  enabled     = false
+  enabled     = true
 }
 
 # Deliberate dynamic A record scenario: content intentionally omitted for Dynu dynamic IPv4 behavior.
