@@ -327,8 +327,9 @@ Implemented:
 - Provider authentication via `api_key` or `DYNU_API_KEY`
 - Optional provider `base_url` override
 - Data sources: `dynu_domains`, `dynu_domain`, `dynu_dns_records`
+- Resource: `dynu_domain` (CRUD + import using numeric domain ID)
 - Resource: `dynu_dns_record` (CRUD + import using `domain_id/record_id`)
 
 Not implemented yet:
-- Additional Terraform resources beyond `dynu_dns_record`
+- Additional Terraform resources beyond `dynu_domain` and `dynu_dns_record`
 - Broader Dynu API coverage outside current DNS/domain scope

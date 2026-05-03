@@ -98,6 +98,7 @@ func (p *dynuProvider) DataSources(_ context.Context) []func() datasource.DataSo
 
 func (p *dynuProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
+		NewDomainResource,
 		NewDNSRecordResource,
 	}
 }

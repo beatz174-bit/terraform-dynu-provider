@@ -106,6 +106,12 @@ type DNSRecord struct {
 	UpdatedOn  string `json:"updatedOn"`
 	Group      string `json:"group"`
 	Host       string `json:"host"`
+	Priority   int64  `json:"priority"`
+	Weight     int64  `json:"weight"`
+	Port       int64  `json:"port"`
+	Flags      int64  `json:"flags"`
+	Tag        string `json:"tag"`
+	Value      string `json:"value"`
 }
 
 type CreateDNSRecordRequest struct {
@@ -116,6 +122,12 @@ type CreateDNSRecordRequest struct {
 	State      *bool   `json:"state,omitempty"`
 	Group      string  `json:"group,omitempty"`
 	Host       string  `json:"host,omitempty"`
+	Priority   int64   `json:"priority,omitempty"`
+	Weight     int64   `json:"weight,omitempty"`
+	Port       int64   `json:"port,omitempty"`
+	Flags      int64   `json:"flags,omitempty"`
+	Tag        string  `json:"tag,omitempty"`
+	Value      string  `json:"value,omitempty"`
 }
 
 type UpdateDNSRecordRequest struct {
@@ -126,7 +138,23 @@ type UpdateDNSRecordRequest struct {
 	State      *bool   `json:"state,omitempty"`
 	Group      string  `json:"group,omitempty"`
 	Host       string  `json:"host,omitempty"`
+	Priority   int64   `json:"priority,omitempty"`
+	Weight     int64   `json:"weight,omitempty"`
+	Port       int64   `json:"port,omitempty"`
+	Flags      int64   `json:"flags,omitempty"`
+	Tag        string  `json:"tag,omitempty"`
+	Value      string  `json:"value,omitempty"`
 }
+
+type CreateDomainRequest struct {
+	Name        string `json:"name"`
+	IPv4Address string `json:"ipv4Address,omitempty"`
+	IPv6Address string `json:"ipv6Address,omitempty"`
+	TTL         int64  `json:"ttl,omitempty"`
+	Group       string `json:"group,omitempty"`
+}
+
+type UpdateDomainRequest = CreateDomainRequest
 
 type listDomainsResponse struct {
 	apiResponse
@@ -172,6 +200,26 @@ func (c *Client) GetDomainByID(ctx context.Context, domainID int64) (*Domain, er
 	return &resp.Domain, nil
 }
 
+func (c *Client) CreateDomain(ctx context.Context, req CreateDomainRequest) (*Domain, error) {
+	var resp getDomainResponse
+	if err := c.doRequest(ctx, http.MethodPost, "/dns", req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.Domain, nil
+}
+
+func (c *Client) UpdateDomain(ctx context.Context, domainID int64, req UpdateDomainRequest) (*Domain, error) {
+	var resp getDomainResponse
+	if err := c.doRequest(ctx, http.MethodPost, fmt.Sprintf("/dns/%d", domainID), req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.Domain, nil
+}
+
+func (c *Client) DeleteDomain(ctx context.Context, domainID int64) error {
+	return c.doRequest(ctx, http.MethodDelete, fmt.Sprintf("/dns/%d", domainID), nil, nil)
+}
+
 func (c *Client) GetRootDomain(ctx context.Context, hostname string) (int64, string, error) {
 	var resp getRootResponse
 	if err := c.doRequest(ctx, http.MethodGet, fmt.Sprintf("/dns/getroot/%s", url.PathEscape(hostname)), nil, &resp); err != nil {
@@ -207,7 +255,7 @@ func (c *Client) GetDNSRecord(ctx context.Context, domainID int64, recordID int6
 
 func (c *Client) CreateDNSRecord(ctx context.Context, domainID int64, req CreateDNSRecordRequest) (*DNSRecord, error) {
 	var resp getDNSRecordResponse
-	if err := c.doRequest(ctx, http.MethodPost, fmt.Sprintf("/dns/%d/record", domainID), buildDNSRecordUpsertPayload(req.RecordType, req.NodeName, req.Content, req.TTL, req.State, req.Group, req.Host), &resp); err != nil {
+	if err := c.doRequest(ctx, http.MethodPost, fmt.Sprintf("/dns/%d/record", domainID), buildDNSRecordUpsertPayload(req), &resp); err != nil {
 		return nil, err
 	}
 	normalizeDNSRecord(&resp.DNSRecord)
@@ -216,7 +264,7 @@ func (c *Client) CreateDNSRecord(ctx context.Context, domainID int64, req Create
 
 func (c *Client) UpdateDNSRecord(ctx context.Context, domainID int64, recordID int64, req UpdateDNSRecordRequest) (*DNSRecord, error) {
 	var resp getDNSRecordResponse
-	if err := c.doRequest(ctx, http.MethodPost, fmt.Sprintf("/dns/%d/record/%d", domainID, recordID), buildDNSRecordUpsertPayload(req.RecordType, req.NodeName, req.Content, req.TTL, req.State, req.Group, req.Host), &resp); err != nil {
+	if err := c.doRequest(ctx, http.MethodPost, fmt.Sprintf("/dns/%d/record/%d", domainID, recordID), buildDNSRecordUpsertPayload(CreateDNSRecordRequest(req)), &resp); err != nil {
 		return nil, err
 	}
 	normalizeDNSRecord(&resp.DNSRecord)
@@ -319,18 +367,30 @@ type dnsRecordUpsertPayload struct {
 	State       *bool   `json:"state,omitempty"`
 	Group       string  `json:"group,omitempty"`
 	Host        string  `json:"host,omitempty"`
+	Priority    int64   `json:"priority,omitempty"`
+	Weight      int64   `json:"weight,omitempty"`
+	Port        int64   `json:"port,omitempty"`
+	Flags       int64   `json:"flags,omitempty"`
+	Tag         string  `json:"tag,omitempty"`
+	Value       string  `json:"value,omitempty"`
 }
 
-func buildDNSRecordUpsertPayload(recordType string, nodeName string, content *string, ttl int64, state *bool, group string, host string) dnsRecordUpsertPayload {
-	normalizedType := strings.ToUpper(strings.TrimSpace(recordType))
-	normalizedContent := normalizeOptionalContent(content)
+func buildDNSRecordUpsertPayload(req CreateDNSRecordRequest) dnsRecordUpsertPayload {
+	normalizedType := strings.ToUpper(strings.TrimSpace(req.RecordType))
+	normalizedContent := normalizeOptionalContent(req.Content)
 	payload := dnsRecordUpsertPayload{
-		NodeName:   nodeName,
+		NodeName:   req.NodeName,
 		RecordType: normalizedType,
-		TTL:        ttl,
-		State:      state,
-		Group:      group,
-		Host:       host,
+		TTL:        req.TTL,
+		State:      req.State,
+		Group:      req.Group,
+		Host:       req.Host,
+		Priority:   req.Priority,
+		Weight:     req.Weight,
+		Port:       req.Port,
+		Flags:      req.Flags,
+		Tag:        req.Tag,
+		Value:      req.Value,
 	}
 
 	switch normalizedType {
@@ -345,6 +405,14 @@ func buildDNSRecordUpsertPayload(recordType string, nodeName string, content *st
 	case "CNAME":
 		if normalizedContent != nil {
 			payload.Host = *normalizedContent
+		}
+	case "MX", "SRV", "NS", "PTR":
+		if normalizedContent != nil {
+			payload.Host = *normalizedContent
+		}
+	case "CAA":
+		if normalizedContent != nil && payload.Value == "" {
+			payload.Value = *normalizedContent
 		}
 	default:
 		payload.Content = normalizedContent

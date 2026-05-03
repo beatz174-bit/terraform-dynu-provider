@@ -43,6 +43,12 @@ type dnsRecordResourceModel struct {
 	Enabled    types.Bool   `tfsdk:"enabled"`
 	Group      types.String `tfsdk:"group"`
 	Host       types.String `tfsdk:"host"`
+	Priority   types.Int64  `tfsdk:"priority"`
+	Weight     types.Int64  `tfsdk:"weight"`
+	Port       types.Int64  `tfsdk:"port"`
+	Flags      types.Int64  `tfsdk:"flags"`
+	Tag        types.String `tfsdk:"tag"`
+	Value      types.String `tfsdk:"value"`
 	NodeName   types.String `tfsdk:"node_name"`
 	DomainID   types.Int64  `tfsdk:"domain_id"`
 	DomainName types.String `tfsdk:"domain_name"`
@@ -82,6 +88,12 @@ func (r *dnsRecordResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 			"enabled":     schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), Description: "Whether this DNS record is enabled/active."},
 			"group":       schema.StringAttribute{Optional: true, Computed: true, Description: "Dynu group value for this record."},
 			"host":        schema.StringAttribute{Optional: true, Computed: true, Description: "Host field for supported Dynu record types."},
+			"priority":    schema.Int64Attribute{Optional: true, Computed: true, Description: "Priority value used by MX/SRV records."},
+			"weight":      schema.Int64Attribute{Optional: true, Computed: true, Description: "Weight value used by SRV records."},
+			"port":        schema.Int64Attribute{Optional: true, Computed: true, Description: "Port value used by SRV records."},
+			"flags":       schema.Int64Attribute{Optional: true, Computed: true, Description: "Flags value used by CAA records."},
+			"tag":         schema.StringAttribute{Optional: true, Computed: true, Description: "Tag value used by CAA records."},
+			"value":       schema.StringAttribute{Optional: true, Computed: true, Description: "Value field used by CAA records."},
 			"node_name":   schema.StringAttribute{Optional: true, Computed: true, Description: "Node/label portion of the record."},
 			"domain_id":   schema.Int64Attribute{Computed: true, Description: "Dynu domain ID resolved from hostname."},
 			"domain_name": schema.StringAttribute{Computed: true, Description: "Dynu root domain name resolved from hostname."},
@@ -149,6 +161,12 @@ func (r *dnsRecordResource) Create(ctx context.Context, req resource.CreateReque
 		State:      boolPointerFromOptional(plan.Enabled),
 		Group:      stringFromOptional(plan.Group),
 		Host:       stringFromOptional(plan.Host),
+		Priority:   int64FromOptional(plan.Priority),
+		Weight:     int64FromOptional(plan.Weight),
+		Port:       int64FromOptional(plan.Port),
+		Flags:      int64FromOptional(plan.Flags),
+		Tag:        stringFromOptional(plan.Tag),
+		Value:      stringFromOptional(plan.Value),
 	}
 	createReq = normalizeDNSRecordCreateRequestForType(createReq)
 	if !validateDNSRecordContentForType(createReq.RecordType, createReq.Content, dynamicIntent, &resp.Diagnostics) {
@@ -249,6 +267,12 @@ func (r *dnsRecordResource) Update(ctx context.Context, req resource.UpdateReque
 		State:      boolPointerFromOptional(preferKnownBool(plan.Enabled, state.Enabled)),
 		Group:      stringFromOptional(preferKnownString(plan.Group, state.Group)),
 		Host:       stringFromOptional(preferKnownString(plan.Host, state.Host)),
+		Priority:   int64FromOptional(preferKnownInt64(plan.Priority, state.Priority)),
+		Weight:     int64FromOptional(preferKnownInt64(plan.Weight, state.Weight)),
+		Port:       int64FromOptional(preferKnownInt64(plan.Port, state.Port)),
+		Flags:      int64FromOptional(preferKnownInt64(plan.Flags, state.Flags)),
+		Tag:        stringFromOptional(preferKnownString(plan.Tag, state.Tag)),
+		Value:      stringFromOptional(preferKnownString(plan.Value, state.Value)),
 	}
 	updateReq = normalizeDNSRecordUpdateRequestForType(updateReq)
 	if !validateDNSRecordContentForType(updateReq.RecordType, updateReq.Content, dynamicIntent, &resp.Diagnostics) {
@@ -268,6 +292,12 @@ func (r *dnsRecordResource) Update(ctx context.Context, req resource.UpdateReque
 				State:      updateReq.State,
 				Group:      updateReq.Group,
 				Host:       updateReq.Host,
+				Priority:   updateReq.Priority,
+				Weight:     updateReq.Weight,
+				Port:       updateReq.Port,
+				Flags:      updateReq.Flags,
+				Tag:        updateReq.Tag,
+				Value:      updateReq.Value,
 			}, &resp.Diagnostics); retryOK {
 				updateReq.Content = retryReq.Content
 				updateReq.Group = retryReq.Group
@@ -337,6 +367,12 @@ func mapDNSRecordToState(record dynuclient.DNSRecord, dynamicIntent bool) dnsRec
 		Enabled:    types.BoolValue(record.State),
 		Group:      mapString(record.Group),
 		Host:       mapString(record.Host),
+		Priority:   types.Int64Value(record.Priority),
+		Weight:     types.Int64Value(record.Weight),
+		Port:       types.Int64Value(record.Port),
+		Flags:      types.Int64Value(record.Flags),
+		Tag:        mapString(record.Tag),
+		Value:      mapString(record.Value),
 		NodeName:   mapString(record.NodeName),
 		DomainID:   types.Int64Value(record.DomainID),
 		DomainName: mapString(record.DomainName),
@@ -455,18 +491,44 @@ func stringPointer(value string) *string {
 }
 
 func normalizeDNSRecordCreateRequestForType(req dynuclient.CreateDNSRecordRequest) dynuclient.CreateDNSRecordRequest {
-	if strings.EqualFold(strings.TrimSpace(req.RecordType), "CNAME") {
+	switch strings.ToUpper(strings.TrimSpace(req.RecordType)) {
+	case "CNAME", "NS", "PTR":
 		if normalizedContent := normalizeOptionalContentString(req.Content); normalizedContent != nil {
 			req.Host = *normalizedContent
+		}
+	case "MX":
+		if normalizedContent := normalizeOptionalContentString(req.Content); normalizedContent != nil {
+			req.Host = *normalizedContent
+		}
+	case "SRV":
+		if normalizedContent := normalizeOptionalContentString(req.Content); normalizedContent != nil {
+			req.Host = *normalizedContent
+		}
+	case "CAA":
+		if normalizedContent := normalizeOptionalContentString(req.Content); normalizedContent != nil && req.Value == "" {
+			req.Value = *normalizedContent
 		}
 	}
 	return req
 }
 
 func normalizeDNSRecordUpdateRequestForType(req dynuclient.UpdateDNSRecordRequest) dynuclient.UpdateDNSRecordRequest {
-	if strings.EqualFold(strings.TrimSpace(req.RecordType), "CNAME") {
+	switch strings.ToUpper(strings.TrimSpace(req.RecordType)) {
+	case "CNAME", "NS", "PTR":
 		if normalizedContent := normalizeOptionalContentString(req.Content); normalizedContent != nil {
 			req.Host = *normalizedContent
+		}
+	case "MX":
+		if normalizedContent := normalizeOptionalContentString(req.Content); normalizedContent != nil {
+			req.Host = *normalizedContent
+		}
+	case "SRV":
+		if normalizedContent := normalizeOptionalContentString(req.Content); normalizedContent != nil {
+			req.Host = *normalizedContent
+		}
+	case "CAA":
+		if normalizedContent := normalizeOptionalContentString(req.Content); normalizedContent != nil && req.Value == "" {
+			req.Value = *normalizedContent
 		}
 	}
 	return req
