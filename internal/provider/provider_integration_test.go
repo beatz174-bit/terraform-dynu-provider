@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dynu/terraform-provider-dynu/internal/testutil/fakedynu"
+	"github.com/beatz174-bit/terraform-provider-dynu/internal/testutil/fakedynu"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"

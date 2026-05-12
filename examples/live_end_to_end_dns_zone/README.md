@@ -19,7 +19,7 @@ This example performs full live validation of the Dynu provider lifecycle by cre
 
 ## Prerequisites
 
-- A local build of this provider with Terraform `dev_overrides` for `dynu/dynu`.
+- A local build of this provider with Terraform `dev_overrides` for `beatz174-bit/dynu`.
 - Dynu API key provided as Terraform variable `dynu_api_key` (for example via `terraform.tfvars`).
 - A disposable domain value for `test_domain`.
 

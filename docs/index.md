@@ -15,7 +15,8 @@ This provider repository is standalone and does not require any external compani
 terraform {
   required_providers {
     dynu = {
-      source = "dynu/dynu"
+      source  = "beatz174-bit/dynu"
+      version = "~> 0.1.0"
     }
   }
 }

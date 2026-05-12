@@ -8,7 +8,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 
-	"github.com/dynu/terraform-provider-dynu/internal/provider"
+	"github.com/beatz174-bit/terraform-provider-dynu/internal/provider"
 )
 
 var (
@@ -26,7 +26,7 @@ func main() {
 	log.Printf("starting terraform-provider-dynu version=%s commit=%s built=%s", version, commit, date)
 
 	err := providerserver.Serve(context.Background(), provider.New(version), providerserver.ServeOpts{
-		Address: "registry.terraform.io/dynu/dynu",
+		Address: "registry.terraform.io/beatz174-bit/dynu",
 	})
 	if err != nil {
 		log.Fatal(err.Error())

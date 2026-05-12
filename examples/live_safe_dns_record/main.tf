@@ -1,5 +1,5 @@
 # Local development note:
-# Keep source as "dynu/dynu" and use ~/.terraformrc dev_overrides to point to
+# Keep source as "beatz174-bit/dynu" and use ~/.terraformrc dev_overrides to point to
 # your local terraform-provider-dynu binary during provider development.
 provider "dynu" {
   api_key = var.dynu_api_key

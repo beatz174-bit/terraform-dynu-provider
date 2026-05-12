@@ -3,7 +3,7 @@ package provider
 import (
 	"testing"
 
-	"github.com/dynu/terraform-provider-dynu/internal/dynuclient"
+	"github.com/beatz174-bit/terraform-provider-dynu/internal/dynuclient"
 )
 
 func TestSortDomains(t *testing.T) {
