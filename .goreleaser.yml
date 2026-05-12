@@ -22,8 +22,10 @@ builds:
 
 archives:
   - id: provider-archives
-    builds: [terraform-provider-dynu]
-    format: zip
+    ids:
+      - terraform-provider-dynu
+    formats:
+      - zip
     name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
 
 checksum:
