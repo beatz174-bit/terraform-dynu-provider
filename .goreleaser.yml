@@ -1,0 +1,33 @@
+version: 2
+project_name: terraform-provider-dynu
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: terraform-provider-dynu
+    binary: terraform-provider-dynu
+    main: ./main.go
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X main.version={{ .Version }} -X main.commit={{ .ShortCommit }} -X main.date={{ .Date }}
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - id: provider-archives
+    builds: [terraform-provider-dynu]
+    format: zip
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+
+checksum:
+  name_template: 'terraform-provider-dynu_{{ .Version }}_SHA256SUMS'
+
+changelog:
+  use: git

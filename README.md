@@ -10,7 +10,11 @@ A standalone Terraform provider for Dynu DNS and domain management.
   - `dynu_domains`
   - `dynu_domain`
   - `dynu_dns_records`
-- Provider authentication via `api_key`.
+- Provider authentication via explicit `api_key` configuration.
+
+## Important safety note
+
+Deleting `dynu_domain` deletes the full Dynu DNS zone for that domain. Treat destroy plans carefully.
 
 ## Minimal usage example
 
@@ -31,21 +35,7 @@ variable "dynu_api_key" {
   type      = string
   sensitive = true
 }
-
-resource "dynu_domain" "example" {
-  name = "my-test-domain.example"
-  ttl  = 300
-}
-
-resource "dynu_dns_record" "www" {
-  hostname    = "www.${dynu_domain.example.name}"
-  record_type = "A"
-  content     = "198.51.100.20"
-  ttl         = 300
-}
 ```
-
-For a live end-to-end workflow that exercises multiple record types, see `examples/live_safe_dns_record/README.md`.
 
 ## Resources
 
@@ -58,43 +48,15 @@ For a live end-to-end workflow that exercises multiple record types, see `exampl
 - `dynu_domain`
 - `dynu_dns_records`
 
-## Testing
-
-Run Go unit/integration tests:
-
-```bash
-go test ./...
-```
-
-Run repository checks:
-
-```bash
-./scripts/fix.sh
-./scripts/check.sh
-```
-
-Run the live end-to-end Terraform example (opt-in, uses real Dynu account data):
-
-```bash
-cd examples/live_safe_dns_record
-cp terraform.tfvars.example terraform.tfvars
-terraform validate
-terraform plan
-# terraform apply
-# terraform destroy
-```
-
-## Development
+## Local development and dev overrides
 
 This provider is not yet published to the Terraform Registry. Use `dev_overrides` with a local build.
-
-1. Build the provider binary:
 
 ```bash
 go build -o terraform-provider-dynu
 ```
 
-2. Configure `~/.terraformrc`:
+`~/.terraformrc`:
 
 ```hcl
 provider_installation {
@@ -106,7 +68,7 @@ provider_installation {
 }
 ```
 
-3. Validate locally without relying on registry publishing:
+Validate locally:
 
 ```bash
 cd examples/read_only
@@ -115,4 +77,39 @@ terraform validate
 terraform plan
 ```
 
-When provider code/config changes, rebuild `terraform-provider-dynu` before re-running Terraform commands.
+If provider code/config changes, rebuild `terraform-provider-dynu` before running Terraform again.
+
+## Testing
+
+```bash
+./scripts/fix.sh
+./scripts/check.sh
+go test ./...
+go vet ./...
+terraform fmt -check -recursive examples
+```
+
+### Optional live acceptance tests
+
+Live tests are opt-in and destructive for test records. They never run by default.
+
+```bash
+DYNU_ACC=1 \
+DYNU_ACC_API_KEY="***" \
+DYNU_ACC_TEST_DOMAIN="example.com" \
+./scripts/testacc.sh --live
+```
+
+Use a disposable domain/subdomain only.
+
+## Release
+
+Build a local stamped binary:
+
+```bash
+./build.sh v0.1.0
+```
+
+Tagged releases (`v*`) run `.github/workflows/release.yml` with GoReleaser to produce multi-platform archives and checksums.
+
+Terraform Registry signing is not configured in this repository yet.

@@ -2,6 +2,7 @@ name: ci
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:
@@ -16,14 +17,27 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Verify formatting and run quality gate
-        run: ./scripts/check.sh
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
 
-      - name: Build provider binary (stamped metadata)
+      - name: Verify go mod tidy is clean
         run: |
-          VERSION="${GITHUB_REF_NAME:-dev}"
-          COMMIT="$(git rev-parse --short HEAD)"
-          DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          go mod tidy
+          git diff --exit-code go.mod go.sum
 
-          go build -o terraform-provider-dynu \
-            -ldflags="-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}"
+      - name: Verify gofmt
+        run: |
+          files="$(git ls-files '*.go')"
+          test -z "$(gofmt -l ${files})"
+
+      - name: Go vet
+        run: go vet ./...
+
+      - name: Go tests
+        run: go test ./...
+
+      - name: Terraform fmt check
+        run: terraform fmt -check -recursive examples
+
+      - name: Repository quality gate
+        run: ./scripts/check.sh
