@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dynu/terraform-provider-dynu/internal/dynuclient"
-	"github.com/dynu/terraform-provider-dynu/internal/testutil/fakedynu"
+	"github.com/beatz174-bit/terraform-provider-dynu/internal/dynuclient"
+	"github.com/beatz174-bit/terraform-provider-dynu/internal/testutil/fakedynu"
 )
 
 func TestClientListDomainsSuccess(t *testing.T) {

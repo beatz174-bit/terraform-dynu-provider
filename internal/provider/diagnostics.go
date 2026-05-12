@@ -4,7 +4,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/dynu/terraform-provider-dynu/internal/dynuclient"
+	"github.com/beatz174-bit/terraform-provider-dynu/internal/dynuclient"
 )
 
 func diagnosticSummary(defaultSummary string, err error) string {

@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dynu/terraform-provider-dynu/internal/dynuclient"
+	"github.com/beatz174-bit/terraform-provider-dynu/internal/dynuclient"
 )
 
 type RootDomain struct {

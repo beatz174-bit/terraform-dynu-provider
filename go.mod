@@ -1,4 +1,4 @@
-module github.com/dynu/terraform-provider-dynu
+module github.com/beatz174-bit/terraform-provider-dynu
 
 go 1.24.0
 

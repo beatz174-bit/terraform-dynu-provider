@@ -13,7 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	"github.com/dynu/terraform-provider-dynu/internal/dynuclient"
+	"github.com/beatz174-bit/terraform-provider-dynu/internal/dynuclient"
 )
 
 var (

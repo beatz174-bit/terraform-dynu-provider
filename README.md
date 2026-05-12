@@ -22,7 +22,8 @@ Deleting `dynu_domain` deletes the full Dynu DNS zone for that domain. Treat des
 terraform {
   required_providers {
     dynu = {
-      source = "dynu/dynu"
+      source  = "beatz174-bit/dynu"
+      version = "~> 0.1.0"
     }
   }
 }
@@ -50,7 +51,7 @@ variable "dynu_api_key" {
 
 ## Local development and dev overrides
 
-This provider is not yet published to the Terraform Registry. Use `dev_overrides` with a local build.
+For local development, use `dev_overrides` with a local build of this provider binary.
 
 ```bash
 go build -o terraform-provider-dynu
@@ -61,7 +62,7 @@ go build -o terraform-provider-dynu
 ```hcl
 provider_installation {
   dev_overrides {
-    "dynu/dynu" = "/path/to/terraform-dynu-provider"
+    "beatz174-bit/dynu" = "/path/to/terraform-dynu-provider"
   }
 
   direct {}
@@ -104,12 +105,23 @@ Use a disposable domain/subdomain only.
 
 ## Release
 
+- Terraform provider source address: `beatz174-bit/dynu`.
+- Repository name must remain `terraform-provider-dynu`.
+- Releases are triggered by pushing a semantic version tag such as `v0.1.0`.
+- Required GitHub Actions secrets:
+  - `GPG_PRIVATE_KEY`
+  - `PASSPHRASE`
+- Add the matching public GPG key to Terraform Registry before publishing, so signature verification succeeds.
+
 Build a local stamped binary:
 
 ```bash
 ./build.sh v0.1.0
 ```
 
-Tagged releases (`v*`) run `.github/workflows/release.yml` with GoReleaser to produce multi-platform archives and checksums.
+Create and push a release tag:
 
-Terraform Registry signing is not configured in this repository yet.
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
