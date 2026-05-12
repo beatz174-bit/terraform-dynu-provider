@@ -4,6 +4,7 @@
 *.dll
 *.so
 *.dylib
+*.key
 terraform-provider-dynu
 terraform-provider-dynu_v*
 dist/
