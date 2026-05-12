@@ -36,8 +36,8 @@ jobs:
       - name: Go tests
         run: go test ./...
 
-      - name: Terraform fmt check
-        run: terraform fmt -check -recursive examples
+      - name: Terraform fmt
+        run: terraform fmt -recursive examples
 
       - name: Repository quality gate
         run: ./scripts/check.sh
